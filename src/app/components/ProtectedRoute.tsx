@@ -3,11 +3,10 @@ import { useAuth } from "../utils/auth";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredUserType: "admin" | "staff";
 }
 
-export function ProtectedRoute({ children, requiredUserType }: ProtectedRouteProps) {
-  const { session, profile, loading, error } = useAuth();
+export function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const { session, loading, error } = useAuth();
 
   if (loading) {
     return null;
@@ -21,15 +20,7 @@ export function ProtectedRoute({ children, requiredUserType }: ProtectedRoutePro
     );
   }
 
-  const role = profile?.role;
-  const isAllowed =
-    !role
-      ? true
-      : requiredUserType === "admin"
-        ? role === "Admin"
-        : role === "Staff" || role === "Manager";
-
-  if (!session || !isAllowed) {
+  if (!session) {
     return <Navigate to="/" replace />;
   }
 

@@ -23,6 +23,7 @@ import {
   Search,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { unwrapRelation } from "../utils/relations";
 import { supabase } from "../utils/supabase";
 
 const COLORS = [
@@ -142,7 +143,8 @@ export function AnalyticsPage() {
 
       const branchSales = new Map<string, number>();
       salesData.forEach((row) => {
-        const name = row.branch?.branch_name ?? "Unknown";
+        const branch = unwrapRelation(row.branch);
+        const name = branch?.branch_name ?? "Unknown";
         branchSales.set(name, (branchSales.get(name) ?? 0) + (row.total ?? 0));
       });
 

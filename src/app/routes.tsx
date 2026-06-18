@@ -2,7 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router";
 import { RootLayout } from "./components/RootLayout";
 import { HomePage } from "./pages/HomePage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
-import { DataPage } from "./pages/DataPage";
+import DataPage from "./pages/DataPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -15,7 +15,7 @@ export const router = createBrowserRouter([
   {
     path: "/admin-home",
     element: (
-      <ProtectedRoute requiredUserType="admin">
+      <ProtectedRoute>
         <RootLayout />
       </ProtectedRoute>
     ),

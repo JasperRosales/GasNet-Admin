@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Users, Package, DollarSign, Activity } from "lucide-react";
+import { unwrapRelation } from "../utils/relations";
 import { supabase } from "../utils/supabase";
 
 interface BranchOverview {
@@ -62,7 +63,8 @@ export function HomePage() {
 
       const branchSales = new Map<string, number>();
       salesData.forEach((row) => {
-        const name = row.branch?.branch_name ?? "Unknown";
+        const branch = unwrapRelation(row.branch);
+        const name = branch?.branch_name ?? "Unknown";
         branchSales.set(name, (branchSales.get(name) ?? 0) + (row.total ?? 0));
       });
       const topBranch = Array.from(branchSales.entries()).sort(
@@ -79,7 +81,8 @@ export function HomePage() {
 
       const branchTotals = new Map<string, number>();
       stockData.forEach((row) => {
-        const name = row.branch?.branch_name ?? "Unknown";
+        const branch = unwrapRelation(row.branch);
+        const name = branch?.branch_name ?? "Unknown";
         branchTotals.set(name, (branchTotals.get(name) ?? 0) + (row.quantity ?? 0));
       });
       const branchCards = Array.from(branchTotals.entries())

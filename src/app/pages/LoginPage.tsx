@@ -11,7 +11,8 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { session, profile, loading, error: authError } = useAuth();
+  const { session, loading, error: authError } = useAuth();
+  const LOGIN_TIMEOUT_MS = 10000;
 
   useEffect(() => {
     if (loading) return;
@@ -31,16 +32,36 @@ export function LoginPage() {
     setError("");
     setIsSubmitting(true);
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const timeout = new Promise<"timeout">((resolve) => {
+        setTimeout(() => resolve("timeout"), LOGIN_TIMEOUT_MS);
+      });
 
-    if (authError) {
-      setError(authError.message);
+      const result = await Promise.race([
+        supabase.auth
+          .signInWithPassword({
+            email,
+            password,
+          })
+          .then((response) => ({ type: "response" as const, response })),
+        timeout,
+      ]);
+
+      if (result === "timeout") {
+        setError("Login timed out. Please check your connection and try again.");
+        return;
+      }
+
+      const { error: authError } = result.response;
+      if (authError) {
+        setError(authError.message);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to sign in.";
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(false);
   };
 
   return (

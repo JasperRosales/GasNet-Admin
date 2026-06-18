@@ -1,37 +1,31 @@
-import { Search, Filter, Download, RefreshCw, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { DataControls } from "./Data/DataControls";
+import { DataHeader } from "./Data/DataHeader";
+import { DataTabs } from "./Data/DataTabs";
+import { ExportReportModal } from "./Data/ExportReportModal";
+import { InventorySection } from "./Data/InventorySection";
+import { InventoryModal } from "./Data/InventoryModal";
+import { ProductModal } from "./Data/ProductModal";
+import { TransactionsTable } from "./Data/TransactionsTable";
+import type {
+  BranchOption,
+  InventoryItem,
+  InventoryDeleteTarget,
+  InventoryForm,
+  InventoryRow,
+  InventoryStatusTab,
+  ProductColumn,
+  ProductOption,
+  ProductForm,
+  ReportType,
+  StatusTone,
+  TransactionRecord,
+} from "./Data/types";
+import { unwrapRelation } from "../utils/relations";
+import { useAuth } from "../utils/auth";
 import { supabase } from "../utils/supabase";
 
-interface InventoryItem {
-  branchId: number;
-  branchName: string;
-  productId: number;
-  productName: string;
-  weightKg: number | null;
-  quantity: number;
-}
-
-interface ProductColumn {
-  id: number;
-  label: string;
-  weight: number | null;
-}
-
-interface TransactionRecord {
-  salesId: number;
-  trackingNo: string | null;
-  guestName: string;
-  branchName: string;
-  subtotal: number;
-  total: number;
-  transactionDate: string;
-  transactionType: string;
-}
-
-type InventoryStatusTab = "Stock" | "Delivered" | "Returned";
-type StatusTone = "low" | "moderate" | "high";
 type FlowStatus = "None" | "Few" | "Plenty";
-type ReportType = "weekly" | "monthly" | "annual";
 const MAX_FLOW_QTY = 40;
 
 const branchFlowProfile: Record<string, FlowStatus> = {
@@ -147,6 +141,17 @@ const REPORT_MONTHS = [
 const formatAmount = (amount: number) => `₱${amount.toLocaleString("en-PH")}`;
 const toLocalDate = (value: string) => new Date(`${value}T00:00:00`);
 const getMonthLabel = (date: Date) => REPORT_MONTHS[date.getMonth()] ?? "";
+const EMPTY_INVENTORY_FORM: InventoryForm = {
+  branchId: "",
+  productId: "",
+  quantity: "",
+  reorderLevel: "1",
+};
+const EMPTY_PRODUCT_FORM: ProductForm = {
+  name: "",
+  weightKg: "",
+};
+
 const formatDisplayDate = (value: string) => {
   const date = toLocalDate(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -158,10 +163,27 @@ const formatDisplayDate = (value: string) => {
 };
 
 export function DataPage() {
+  const { user } = useAuth();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventoryColumns, setInventoryColumns] = useState<ProductColumn[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
   const [inventoryError, setInventoryError] = useState("");
+  const [branchOptions, setBranchOptions] = useState<BranchOption[]>([]);
+  const [productOptions, setProductOptions] = useState<ProductOption[]>([]);
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [productForm, setProductForm] = useState<ProductForm>(EMPTY_PRODUCT_FORM);
+  const [productMutationError, setProductMutationError] = useState("");
+  const [isProductSaving, setIsProductSaving] = useState(false);
+  const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
+  const [inventoryForm, setInventoryForm] =
+    useState<InventoryForm>(EMPTY_INVENTORY_FORM);
+  const [editingStockId, setEditingStockId] = useState<number | null>(null);
+  const [inventoryMutationError, setInventoryMutationError] = useState("");
+  const [isInventorySaving, setIsInventorySaving] = useState(false);
+  const [isInventoryDeleting, setIsInventoryDeleting] = useState(false);
+  const [inventoryDeleteTarget, setInventoryDeleteTarget] =
+    useState<InventoryDeleteTarget | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [transactionsError, setTransactionsError] = useState("");
@@ -180,64 +202,108 @@ export function DataPage() {
   );
   const [reportWeek, setReportWeek] = useState("1");
 
-  useEffect(() => {
-    const loadInventory = async () => {
-      setInventoryLoading(true);
-      setInventoryError("");
-      const { data, error } = await supabase
-        .from("branch_stock")
-        .select(
-          "quantity, branch:branches(branch_id, branch_name), product:products(product_id, product_name, weight_kg)",
-        );
+  const loadInventory = async () => {
+    setInventoryLoading(true);
+    setInventoryError("");
+    const { data, error } = await supabase
+      .from("branch_stock")
+      .select(
+        "stock_id, quantity, reorder_level, branch:branches(branch_id, branch_name), product:products(product_id, product_name, weight_kg)",
+      );
 
-      if (error) {
-        setInventoryError(error.message);
-        setInventoryItems([]);
-        setInventoryColumns([]);
-        setInventoryLoading(false);
-        return;
-      }
-
-      const mapped =
-        (data ?? [])
-          .map((row) => {
-            const branch = row.branch;
-            const product = row.product;
-            if (!branch || !product) return null;
-            return {
-              branchId: branch.branch_id,
-              branchName: branch.branch_name,
-              productId: product.product_id,
-              productName: product.product_name,
-              weightKg: product.weight_kg,
-              quantity: row.quantity,
-            };
-          })
-          .filter((item): item is InventoryItem => Boolean(item)) ?? [];
-
-      const columnMap = new Map<number, ProductColumn>();
-      mapped.forEach((item) => {
-        if (!columnMap.has(item.productId)) {
-          columnMap.set(item.productId, {
-            id: item.productId,
-            label: item.productName,
-            weight: item.weightKg,
-          });
-        }
-      });
-
-      const columns = Array.from(columnMap.values()).sort((a, b) => {
-        const weightDelta = (a.weight ?? 0) - (b.weight ?? 0);
-        if (weightDelta !== 0) return weightDelta;
-        return a.label.localeCompare(b.label);
-      });
-
-      setInventoryItems(mapped);
-      setInventoryColumns(columns);
+    if (error) {
+      setInventoryError(error.message);
+      setInventoryItems([]);
+      setInventoryColumns([]);
       setInventoryLoading(false);
-    };
+      return;
+    }
 
-    loadInventory();
+    const mapped =
+      (data ?? [])
+        .map((row) => {
+          const branch = unwrapRelation(row.branch);
+          const product = unwrapRelation(row.product);
+          if (!branch || !product) return null;
+          return {
+            stockId: row.stock_id,
+            branchId: branch.branch_id,
+            branchName: branch.branch_name,
+            productId: product.product_id,
+            productName: product.product_name,
+            weightKg: product.weight_kg,
+            quantity: row.quantity,
+            reorderLevel: row.reorder_level,
+          };
+        })
+        .filter((item): item is InventoryItem => Boolean(item)) ?? [];
+
+    const columnMap = new Map<number, ProductColumn>();
+    mapped.forEach((item) => {
+      if (!columnMap.has(item.productId)) {
+        columnMap.set(item.productId, {
+          id: item.productId,
+          label:
+            item.weightKg !== null ? `${item.weightKg} kg` : item.productName,
+          weight: item.weightKg,
+        });
+      }
+    });
+
+    const columns = Array.from(columnMap.values()).sort((a, b) => {
+      const weightDelta = (a.weight ?? 0) - (b.weight ?? 0);
+      if (weightDelta !== 0) return weightDelta;
+      return a.label.localeCompare(b.label);
+    });
+
+    setInventoryItems(mapped);
+    setInventoryColumns(columns);
+    setInventoryLoading(false);
+  };
+
+  const loadInventoryMetadata = async () => {
+    const [{ data: branchData, error: branchError }, { data: productData, error: productError }] =
+      await Promise.all([
+        supabase.from("branches").select("branch_id, branch_name").order("branch_name"),
+        supabase
+          .from("products")
+          .select("product_id, product_name, weight_kg, active")
+          .eq("active", true)
+          .order("product_name"),
+      ]);
+
+    if (branchError) {
+      setInventoryError(branchError.message);
+      setBranchOptions([]);
+    } else {
+      setBranchOptions(
+        branchData?.map((branch) => ({
+          id: branch.branch_id,
+          name: branch.branch_name,
+        })) ?? [],
+      );
+    }
+
+    if (productError) {
+      setInventoryError(productError.message);
+      setProductOptions([]);
+    } else {
+      setProductOptions(
+        productData?.map((product) => ({
+          id: product.product_id,
+          label: product.product_name,
+          weight: product.weight_kg,
+        })) ?? [],
+      );
+    }
+  };
+
+  useEffect(() => {
+    void loadInventory();
+  }, []);
+
+  useEffect(() => {
+    void loadInventoryMetadata();
   }, []);
 
   useEffect(() => {
@@ -260,16 +326,19 @@ export function DataPage() {
       }
 
       const mapped =
-        data?.map((row) => ({
-          salesId: row.sales_id,
-          trackingNo: row.tracking_no,
-          guestName: row.guest_name,
-          branchName: row.branch?.branch_name ?? "Unknown",
-          subtotal: row.subtotal,
-          total: row.total,
-          transactionDate: row.transaction_date,
-          transactionType: row.transaction_type,
-        })) ?? [];
+        data?.map((row) => {
+          const branch = unwrapRelation(row.branch);
+          return {
+            salesId: row.sales_id,
+            trackingNo: row.tracking_no,
+            guestName: row.guest_name,
+            branchName: branch?.branch_name ?? "Unknown",
+            subtotal: row.subtotal,
+            total: row.total,
+            transactionDate: row.transaction_date,
+            transactionType: row.transaction_type,
+          };
+        }) ?? [];
 
       setTransactions(mapped);
       setTransactionsLoading(false);
@@ -277,6 +346,30 @@ export function DataPage() {
 
     loadTransactions();
   }, []);
+
+  useEffect(() => {
+    const loadUserRole = async () => {
+      if (!user) {
+        setUserRole(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("staff")
+        .select("role")
+        .eq("staff_id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        setUserRole(null);
+        return;
+      }
+
+      setUserRole(data?.role ?? null);
+    };
+
+    void loadUserRole();
+  }, [user]);
 
   const availableYears = useMemo(() => {
     const years = new Set<string>();
@@ -308,17 +401,10 @@ export function DataPage() {
     [inventoryItems],
   );
 
+  const isAdmin = userRole === "Admin";
+
   const inventoryRows = useMemo(() => {
-    const rowMap = new Map<
-      string,
-      {
-        branchId: number;
-        branchName: string;
-        quantities: Record<number, number>;
-        outgoingTotal: number;
-        returnedTotal: number;
-      }
-    >();
+    const rowMap = new Map<string, InventoryRow>();
 
     inventoryItems.forEach((item) => {
       const existing = rowMap.get(item.branchName);
@@ -354,6 +440,213 @@ export function DataPage() {
 
     return Array.from(rowMap.values());
   }, [activeInventoryStatus, branchStockTotals, inventoryItems]);
+
+  const closeInventoryModal = () => {
+    setInventoryModalOpen(false);
+    setEditingStockId(null);
+    setInventoryForm(EMPTY_INVENTORY_FORM);
+    setInventoryMutationError("");
+    setIsInventorySaving(false);
+    setIsInventoryDeleting(false);
+  };
+
+  const closeProductModal = () => {
+    setProductModalOpen(false);
+    setProductForm(EMPTY_PRODUCT_FORM);
+    setProductMutationError("");
+    setIsProductSaving(false);
+  };
+
+  const openAddInventoryData = () => {
+    setEditingStockId(null);
+    setInventoryMutationError("");
+    setInventoryForm({
+      branchId: branchOptions[0] ? String(branchOptions[0].id) : "",
+      productId: productOptions[0] ? String(productOptions[0].id) : "",
+      quantity: "",
+      reorderLevel: "1",
+    });
+    setInventoryModalOpen(true);
+  };
+
+  const openCreateProduct = () => {
+    setProductMutationError("");
+    setProductForm(EMPTY_PRODUCT_FORM);
+    setProductModalOpen(true);
+  };
+
+  const openEditInventoryRow = (branchId: number) => {
+    setEditingStockId(null);
+    setInventoryMutationError("");
+    setInventoryForm({
+      branchId: String(branchId),
+      productId: productOptions[0] ? String(productOptions[0].id) : "",
+      quantity: "",
+      reorderLevel: "1",
+    });
+    setInventoryModalOpen(true);
+  };
+
+  const editInventoryItem = (item: InventoryItem) => {
+    setEditingStockId(item.stockId);
+    setInventoryMutationError("");
+    setInventoryForm({
+      branchId: String(item.branchId),
+      productId: String(item.productId),
+      quantity: String(item.quantity),
+      reorderLevel: String(item.reorderLevel),
+    });
+    setInventoryModalOpen(true);
+  };
+
+  const requestDeleteInventoryItem = (item: InventoryItem) => {
+    setInventoryDeleteTarget({
+      stockId: item.stockId,
+      branchName: item.branchName,
+      productName: item.productName,
+    });
+  };
+
+  const handleInventorySubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    setIsInventorySaving(true);
+    setInventoryMutationError("");
+
+    const branchId = Number(inventoryForm.branchId);
+    const productId = Number(inventoryForm.productId);
+    const quantity = Number(inventoryForm.quantity);
+    const reorderLevel = Number(inventoryForm.reorderLevel);
+
+    if (!branchId || !productId) {
+      setInventoryMutationError("Select a branch and product.");
+      setIsInventorySaving(false);
+      return;
+    }
+
+    if (Number.isNaN(quantity) || Number.isNaN(reorderLevel)) {
+      setInventoryMutationError("Quantity and reorder level must be numbers.");
+      setIsInventorySaving(false);
+      return;
+    }
+
+    const payload = {
+      branch_id: branchId,
+      product_id: productId,
+      quantity,
+      reorder_level: reorderLevel,
+    };
+    const existingItem = inventoryItems.find(
+      (item) => item.branchId === branchId && item.productId === productId,
+    );
+    const targetStockId = editingStockId ?? existingItem?.stockId;
+
+    const mutation = targetStockId !== undefined
+      ? supabase
+          .from("branch_stock")
+          .update(payload)
+          .eq("stock_id", targetStockId)
+      : supabase.from("branch_stock").insert(payload);
+
+    const { error } = await mutation;
+
+    if (error) {
+      setInventoryMutationError(error.message);
+      setIsInventorySaving(false);
+      return;
+    }
+
+    await loadInventory();
+    setIsInventorySaving(false);
+    closeInventoryModal();
+  };
+
+  const confirmDeleteInventoryItem = async () => {
+    if (!inventoryDeleteTarget) return;
+
+    setIsInventoryDeleting(true);
+    setInventoryMutationError("");
+
+    const { error } = await supabase
+      .from("branch_stock")
+      .delete()
+      .eq("stock_id", inventoryDeleteTarget.stockId);
+
+    if (error) {
+      setInventoryMutationError(error.message);
+      setIsInventoryDeleting(false);
+      return;
+    }
+
+    await loadInventory();
+    setIsInventoryDeleting(false);
+    setInventoryDeleteTarget(null);
+
+    if (editingStockId === inventoryDeleteTarget.stockId) {
+      closeInventoryModal();
+    }
+  };
+
+  const handleInventoryFormChange = (
+    field: keyof InventoryForm,
+    value: string,
+  ) => {
+    setInventoryForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleProductFormChange = (
+    field: keyof ProductForm,
+    value: string,
+  ) => {
+    setProductForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleProductSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    setIsProductSaving(true);
+    setProductMutationError("");
+
+    const name = productForm.name.trim();
+    const weightKg = Number.parseFloat(productForm.weightKg);
+
+    if (!name) {
+      setProductMutationError("Product name is required.");
+      setIsProductSaving(false);
+      return;
+    }
+
+    if (!Number.isFinite(weightKg) || weightKg <= 0) {
+      setProductMutationError("Weight must be a positive decimal number.");
+      setIsProductSaving(false);
+      return;
+    }
+
+    const { error } = await supabase.from("products").insert({
+      product_name: name,
+      weight_kg: weightKg,
+      active: true,
+    });
+
+    if (error) {
+      setProductMutationError(error.message);
+      setIsProductSaving(false);
+      return;
+    }
+
+    await loadInventoryMetadata();
+    await loadInventory();
+    setIsProductSaving(false);
+    closeProductModal();
+  };
 
   const generateWeeklyReport = () => {
     const week = Number(reportWeek);
@@ -497,493 +790,113 @@ export function DataPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-[#1B211A] mb-2">Distribution Management</h1>
-        <p className="text-[#628141]">
-          Access and manage all your LPG trading data
-        </p>
-      </div>
-
-      {/* Tab Switcher */}
-      <div
-        className="inline-flex p-2 rounded-3xl bg-[#FFFDF1]"
-        style={{
-          boxShadow:
-            "0 8px 32px rgba(98, 129, 65, 0.15), inset 0 2px 8px rgba(255, 255, 255, 0.6), inset 0 -2px 8px rgba(98, 129, 65, 0.05)",
-        }}
-      >
-        <button
-          onClick={() => setActiveTab("inventory")}
-          className={`px-6 py-3 rounded-2xl transition-all ${
-            activeTab === "inventory"
-              ? "bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1]"
-              : "text-[#628141]"
-          }`}
-          style={
-            activeTab === "inventory"
-              ? {
-                  boxShadow:
-                    "0 4px 16px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-                }
-              : {}
-          }
-        >
-          Inventory Data
-        </button>
-        <button
-          onClick={() => setActiveTab("transactions")}
-          className={`px-6 py-3 rounded-2xl transition-all ${
-            activeTab === "transactions"
-              ? "bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1]"
-              : "text-[#628141]"
-          }`}
-          style={
-            activeTab === "transactions"
-              ? {
-                  boxShadow:
-                    "0 4px 16px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-                }
-              : {}
-          }
-        >
-          Transaction History
-        </button>
-      </div>
-
-      {/* Controls */}
-      <div
-        className="p-4 rounded-3xl bg-[#FFFDF1] flex flex-wrap gap-4 items-center justify-between"
-        style={{
-          boxShadow:
-            "0 8px 32px rgba(98, 129, 65, 0.15), inset 0 2px 8px rgba(255, 255, 255, 0.6), inset 0 -2px 8px rgba(98, 129, 65, 0.05)",
-        }}
-      >
-        <div className="flex gap-3 flex-1">
-          <div
-            className="flex items-center gap-2 px-4 py-2 rounded-2xl flex-1 max-w-md"
-            style={{
-              background: "rgba(235, 213, 171, 0.3)",
-              boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-            }}
-          >
-            <Search className="w-5 h-5 text-[#628141]" />
-            <input
-              type="text"
-              placeholder="Search data..."
-              className="flex-1 bg-transparent border-none outline-none text-[#1B211A] placeholder:text-[#628141]/50"
-            />
-          </div>
-          <button
-            onClick={() => setIsExportModalOpen(true)}
-            className="px-4 py-2 rounded-2xl bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1] flex items-center gap-2"
-            style={{
-              boxShadow:
-                "0 4px 16px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-            }}
-          >
-            <Search className="w-5 h-5" />
-            Search
-          </button>
-          <button
-            className="px-4 py-2 rounded-2xl bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1] flex items-center gap-2"
-            style={{
-              boxShadow:
-                "0 4px 16px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-            }}
-          >
-            <Filter className="w-5 h-5" />
-            Branch
-          </button>
-           <button
-            className="px-4 py-2 rounded-2xl bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1] flex items-center gap-2"
-            style={{
-              boxShadow:
-                "0 4px 16px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-            }}
-          >
-            <Filter className="w-5 h-5" />
-            Sort
-          </button>
-         
-        </div>
-        <div className="flex gap-3">
-          <button
-            className="px-4 py-2 rounded-2xl bg-[#8BAE66]/20 text-[#628141] flex items-center gap-2"
-            style={{
-              boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-            }}
-          >
-            <RefreshCw className="w-5 h-5" />
-            Refresh
-          </button>
-          <button
-            className="px-4 py-2 rounded-2xl bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1] flex items-center gap-2"
-            style={{
-              boxShadow:
-                "0 4px 16px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-            }}
-          >
-            <Download className="w-5 h-5" />
-            Export
-          </button>
-        </div>
-      </div>
-
-      {/* Data Table */}
+      <DataHeader />
+      <DataTabs activeTab={activeTab} onChange={setActiveTab} />
+      <DataControls onOpenExport={() => setIsExportModalOpen(true)} />
       {activeTab === "inventory" ? (
-        <div className="space-y-4">
-          <div
-            className="inline-flex p-2 rounded-3xl bg-[#FFFDF1]"
-            style={{
-              boxShadow:
-                "0 8px 32px rgba(98, 129, 65, 0.15), inset 0 2px 8px rgba(255, 255, 255, 0.6), inset 0 -2px 8px rgba(98, 129, 65, 0.05)",
-            }}
-          >
-            {(["Stock", "Delivered", "Returned"] as const).map((statusTab) => (
-              <button
-                key={statusTab}
-                onClick={() => setActiveInventoryStatus(statusTab)}
-                className={`px-6 py-2 rounded-2xl transition-all ${
-                  activeInventoryStatus === statusTab
-                    ? "bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1]"
-                    : "text-[#628141]"
-                }`}
-                style={
-                  activeInventoryStatus === statusTab
-                    ? {
-                        boxShadow:
-                          "0 4px 16px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-                      }
-                    : {}
-                }
-              >
-                {statusTab}
-              </button>
-            ))}
-          </div>
-          <div
-            className="rounded-3xl bg-[#FFFDF1] overflow-hidden"
-            style={{
-              boxShadow:
-                "0 8px 32px rgba(98, 129, 65, 0.15), inset 0 2px 8px rgba(255, 255, 255, 0.6), inset 0 -2px 8px rgba(98, 129, 65, 0.05)",
-            }}
-          >
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-[#628141] to-[#8BAE66]">
-                <tr>
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">ID</th>
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">Branch</th>
-                  {inventoryColumns.map((column) => (
-                    <th
-                      key={column.id}
-                      className="px-6 py-4 text-left text-[#FFFDF1]"
-                    >
-                      {column.label}
-                    </th>
-                  ))}
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">Total</th>
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">Status</th>
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">
-                    Last Update
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {inventoryLoading ? (
-                  <tr>
-                    <td
-                      colSpan={inventoryColumns.length + 5}
-                      className="px-6 py-6 text-center text-sm text-[#628141]"
-                    >
-                      Loading inventory...
-                    </td>
-                  </tr>
-                ) : inventoryError ? (
-                  <tr>
-                    <td
-                      colSpan={inventoryColumns.length + 5}
-                      className="px-6 py-6 text-center text-sm text-red-600"
-                    >
-                      {inventoryError}
-                    </td>
-                  </tr>
-                ) : inventoryRows.length ? (
-                  inventoryRows.map((row, index) => {
-                    const total = inventoryColumns.reduce(
-                      (sum, column) => sum + (row.quantities[column.id] ?? 0),
-                      0,
-                    );
-
-                    const statusMeta = getInventoryStatusMeta(
-                      total,
-                      activeInventoryStatus,
-                      row.outgoingTotal,
-                      row.returnedTotal,
-                    );
-
-                    return (
-                      <tr
-                        key={row.branchName}
-                        className={`border-b border-[#8BAE66]/20 ${
-                          index % 2 === 0 ? "bg-[#FFFDF1]" : "bg-[#EBD5AB]/10"
-                        }`}
-                      >
-                        <td className="px-6 py-4 text-[#1B211A]">
-                          {row.branchId}
-                        </td>
-                        <td className="px-6 py-4 text-[#628141]">
-                          {row.branchName}
-                        </td>
-                        {inventoryColumns.map((column) => (
-                          <td key={column.id} className="px-6 py-4">
-                            {row.quantities[column.id] ?? 0}
-                          </td>
-                        ))}
-                        <td className="px-6 py-4">{total}</td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`px-3 py-1 rounded-full text-sm ${getStatusBadgeClass(statusMeta.tone)}`}
-                          >
-                            {statusMeta.label}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-[#628141] text-sm">
-                          —
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={inventoryColumns.length + 5}
-                      className="px-6 py-6 text-center text-sm text-[#628141]"
-                    >
-                      No inventory data available.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        </div>
+        <InventorySection
+          inventoryColumns={inventoryColumns}
+          inventoryRows={inventoryRows}
+          inventoryLoading={inventoryLoading}
+          inventoryError={inventoryError}
+          activeStatus={activeInventoryStatus}
+          onStatusChange={setActiveInventoryStatus}
+          onAddInventoryData={openAddInventoryData}
+          onCreateProduct={openCreateProduct}
+          onEditInventoryRow={openEditInventoryRow}
+          getInventoryStatusMeta={getInventoryStatusMeta}
+          getStatusBadgeClass={getStatusBadgeClass}
+        />
       ) : (
-        <div
-          className="rounded-3xl bg-[#FFFDF1] overflow-hidden"
-          style={{
-            boxShadow:
-              "0 8px 32px rgba(98, 129, 65, 0.15), inset 0 2px 8px rgba(255, 255, 255, 0.6), inset 0 -2px 8px rgba(98, 129, 65, 0.05)",
-          }}
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-[#628141] to-[#8BAE66]">
-                <tr>
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">
-                    ID
-                  </th>
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">
-                    Tracking No
-                  </th>
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">
-                    Customer
-                  </th>
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">Branch</th>
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">
-                    Subtotal
-                  </th>
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">Total</th>
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">Date</th>
-                  <th className="px-6 py-4 text-left text-[#FFFDF1]">Type</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactionsLoading ? (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="px-6 py-6 text-center text-sm text-[#628141]"
-                    >
-                      Loading transactions...
-                    </td>
-                  </tr>
-                ) : transactionsError ? (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="px-6 py-6 text-center text-sm text-red-600"
-                    >
-                      {transactionsError}
-                    </td>
-                  </tr>
-                ) : (
-                  transactions.map((txn, index) => (
-                    <tr
-                      key={txn.salesId}
-                      className={`border-b border-[#8BAE66]/20 ${index % 2 === 0 ? "bg-[#FFFDF1]" : "bg-[#EBD5AB]/10"}`}
-                    >
-                      <td className="px-6 py-4 text-[#1B211A]">
-                        {txn.salesId}
-                      </td>
-                      <td className="px-6 py-4 text-[#628141]">
-                        {txn.trackingNo ?? "—"}
-                      </td>
-                      <td className="px-6 py-4 text-[#628141]">
-                        {txn.guestName}
-                      </td>
-                      <td className="px-6 py-4 text-[#628141]">
-                        {txn.branchName}
-                      </td>
-                      <td className="px-6 py-4 text-[#1B211A]">
-                        {formatAmount(txn.subtotal)}
-                      </td>
-                      <td className="px-6 py-4 text-[#1B211A]">
-                        {formatAmount(txn.total)}
-                      </td>
-                      <td className="px-6 py-4 text-[#628141] text-sm">
-                        {formatDisplayDate(txn.transactionDate)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="px-3 py-1 rounded-full text-sm bg-[#8BAE66]/20 text-[#628141]">
-                          {txn.transactionType}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <TransactionsTable
+          transactions={transactions}
+          loading={transactionsLoading}
+          error={transactionsError}
+          formatAmount={formatAmount}
+          formatDisplayDate={formatDisplayDate}
+        />
       )}
 
-      {isExportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1B211A]/40 p-4">
+      <ExportReportModal
+        open={isExportModalOpen}
+        reportType={reportType}
+        reportYear={reportYear}
+        reportMonth={reportMonth}
+        reportWeek={reportWeek}
+        availableYears={availableYears}
+        months={REPORT_MONTHS}
+        reportPreview={reportPreview}
+        onClose={() => setIsExportModalOpen(false)}
+        onExport={handleExportReport}
+        onReportTypeChange={setReportType}
+        onReportYearChange={setReportYear}
+        onReportMonthChange={setReportMonth}
+        onReportWeekChange={setReportWeek}
+      />
+      <InventoryModal
+        open={inventoryModalOpen}
+        branches={branchOptions}
+        products={productOptions}
+        inventoryItems={inventoryItems}
+        form={inventoryForm}
+        editingStockId={editingStockId}
+        error={inventoryMutationError}
+        isSaving={isInventorySaving}
+        isDeleting={isInventoryDeleting}
+        onClose={closeInventoryModal}
+        onSubmit={handleInventorySubmit}
+        onFieldChange={handleInventoryFormChange}
+        onEditItem={editInventoryItem}
+        onDeleteItem={requestDeleteInventoryItem}
+      />
+      <ProductModal
+        open={productModalOpen}
+        form={productForm}
+        error={productMutationError}
+        isSaving={isProductSaving}
+        onClose={closeProductModal}
+        onSubmit={handleProductSubmit}
+        onFieldChange={handleProductFormChange}
+      />
+      {inventoryDeleteTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#1B211A]/50 p-4">
           <div
-            className="w-full max-w-3xl rounded-3xl bg-[#FFFDF1] p-6"
+            className="w-full max-w-md rounded-3xl bg-[#FFFDF1] p-6"
             style={{
               boxShadow:
                 "0 12px 48px rgba(27, 33, 26, 0.3), inset 0 2px 8px rgba(255, 255, 255, 0.8), inset 0 -2px 8px rgba(98, 129, 65, 0.1)",
             }}
           >
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-[#1B211A]">Export Distribution Report</h3>
-                <p className="text-sm text-[#628141]">
-                  Configure weekly, monthly, or annual report export.
-                </p>
-              </div>
-              <button
-                onClick={() => setIsExportModalOpen(false)}
-                className="rounded-xl p-2 text-[#628141] hover:bg-[#EBD5AB]/30"
-                title="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
+            <div className="mb-6 space-y-2">
+              <h3 className="text-[#1B211A]">Confirm deletion</h3>
+              <p className="text-sm text-[#628141]">
+                Delete {inventoryDeleteTarget.productName} from{" "}
+                {inventoryDeleteTarget.branchName}? This cannot be undone.
+              </p>
             </div>
-
-            <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-              <button
-                onClick={() => setReportType("weekly")}
-                className={`rounded-xl px-4 py-2 text-sm ${
-                  reportType === "weekly"
-                    ? "bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1]"
-                    : "bg-[#8BAE66]/20 text-[#628141]"
-                }`}
-              >
-                Weekly Report
-              </button>
-              <button
-                onClick={() => setReportType("monthly")}
-                className={`rounded-xl px-4 py-2 text-sm ${
-                  reportType === "monthly"
-                    ? "bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1]"
-                    : "bg-[#8BAE66]/20 text-[#628141]"
-                }`}
-              >
-                Monthly Report
-              </button>
-              <button
-                onClick={() => setReportType("annual")}
-                className={`rounded-xl px-4 py-2 text-sm ${
-                  reportType === "annual"
-                    ? "bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1]"
-                    : "bg-[#8BAE66]/20 text-[#628141]"
-                }`}
-              >
-                Annual Report
-              </button>
-            </div>
-
-            <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-              <select
-                value={reportYear}
-                onChange={(event) => setReportYear(event.target.value)}
-                className="rounded-xl bg-[#EBD5AB]/20 px-3 py-2 text-[#1B211A] outline-none"
-              >
-                {(availableYears.length ? availableYears : ["2026"]).map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-
-              {(reportType === "weekly" || reportType === "monthly") && (
-                <select
-                  value={reportMonth}
-                  onChange={(event) => setReportMonth(event.target.value)}
-                  className="rounded-xl bg-[#EBD5AB]/20 px-3 py-2 text-[#1B211A] outline-none"
-                >
-                  {REPORT_MONTHS.map((month) => (
-                    <option key={month} value={month}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              {reportType === "weekly" && (
-                <select
-                  value={reportWeek}
-                  onChange={(event) => setReportWeek(event.target.value)}
-                  className="rounded-xl bg-[#EBD5AB]/20 px-3 py-2 text-[#1B211A] outline-none"
-                >
-                  {[1, 2, 3, 4, 5].map((week) => (
-                    <option key={week} value={String(week)}>
-                      Week {week}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-
-            <div
-              className="mb-4 rounded-2xl bg-[#EBD5AB]/15 p-4"
-              style={{
-                boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-              }}
-            >
-              <p className="mb-2 text-sm text-[#628141]">Report Preview</p>
-              <pre className="whitespace-pre-wrap text-sm text-[#1B211A]">
-                {reportPreview}
-              </pre>
-            </div>
-
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setIsExportModalOpen(false)}
+                type="button"
+                onClick={() => setInventoryDeleteTarget(null)}
+                disabled={isInventoryDeleting}
                 className="rounded-xl bg-[#8BAE66]/20 px-4 py-2 text-[#628141]"
+                style={{
+                  boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
+                }}
               >
                 Cancel
               </button>
               <button
-                onClick={handleExportReport}
+                type="button"
+                onClick={confirmDeleteInventoryItem}
+                disabled={isInventoryDeleting}
                 className="rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] px-4 py-2 text-[#FFFDF1]"
+                style={{
+                  boxShadow:
+                    "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
+                }}
               >
-                Export Report
+                {isInventoryDeleting ? "Deleting..." : "Delete Item"}
               </button>
             </div>
           </div>
@@ -992,3 +905,5 @@ export function DataPage() {
     </div>
   );
 }
+
+export default DataPage;

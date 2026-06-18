@@ -1,37 +1,24 @@
-import { Globe, Database, Plus, X, Users } from "lucide-react";
+import { Database } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import bcrypt from "bcryptjs";
+import { BranchManagement } from "./Settings/BranchManagement";
+import { BranchModal } from "./Settings/BranchModal";
+import { DeleteConfirmModal } from "./Settings/DeleteConfirmModal";
+import { SettingsHeader } from "./Settings/SettingsHeader";
+import { SettingsSectionList } from "./Settings/SettingsSectionList";
+import { StaffManagement } from "./Settings/StaffManagement";
+import { StaffModal } from "./Settings/StaffModal";
+import type {
+  BranchForm,
+  BranchSetting,
+  DeleteTarget,
+  SettingSection,
+  StaffForm,
+  StaffRole,
+  StaffSetting,
+} from "./Settings/types";
+import { unwrapRelation } from "../utils/relations";
 import { supabase } from "../utils/supabase";
-
-type StaffRole = "Admin" | "Staff" | "Manager";
-
-interface BranchSetting {
-  id: number;
-  name: string;
-  location: string;
-  contactNo: string;
-}
-
-interface StaffSetting {
-  id: string;
-  username: string;
-  role: StaffRole;
-  branchId: number;
-  branchName: string;
-}
-
-interface BranchForm {
-  name: string;
-  location: string;
-  contactNo: string;
-}
-
-interface StaffForm {
-  username: string;
-  password: string;
-  role: StaffRole;
-  branchId: string;
-}
 
 const EMPTY_BRANCH_FORM: BranchForm = {
   name: "",
@@ -44,6 +31,28 @@ const EMPTY_STAFF_FORM: StaffForm = {
   password: "",
   role: "Staff",
   branchId: "",
+};
+
+const generateStaffId = () => {
+  const cryptoObject = globalThis.crypto;
+  if (!cryptoObject) {
+    throw new Error("Secure UUID generation is not available in this browser.");
+  }
+  if (cryptoObject.randomUUID) {
+    return cryptoObject.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  cryptoObject.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const toHex = (value: number) => value.toString(16).padStart(2, "0");
+  return (
+    `${toHex(bytes[0])}${toHex(bytes[1])}${toHex(bytes[2])}${toHex(bytes[3])}` +
+    `-${toHex(bytes[4])}${toHex(bytes[5])}` +
+    `-${toHex(bytes[6])}${toHex(bytes[7])}` +
+    `-${toHex(bytes[8])}${toHex(bytes[9])}` +
+    `-${toHex(bytes[10])}${toHex(bytes[11])}${toHex(bytes[12])}${toHex(bytes[13])}${toHex(bytes[14])}${toHex(bytes[15])}`
+  );
 };
 
 export function SettingsPage() {
@@ -64,6 +73,7 @@ export function SettingsPage() {
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
   const [staffForm, setStaffForm] = useState<StaffForm>(EMPTY_STAFF_FORM);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   useEffect(() => {
     const loadBranches = async () => {
@@ -115,13 +125,16 @@ export function SettingsPage() {
       }
 
       const mapped =
-        data?.map((staff) => ({
-          id: staff.staff_id,
-          username: staff.username,
-          role: staff.role as StaffRole,
-          branchId: staff.branch_id,
-          branchName: staff.branch?.branch_name ?? "Unknown",
-        })) ?? [];
+        data?.map((staff) => {
+          const branch = unwrapRelation(staff.branch);
+          return {
+            id: staff.staff_id,
+            username: staff.username,
+            role: staff.role as StaffRole,
+            branchId: staff.branch_id,
+            branchName: branch?.branch_name ?? "Unknown",
+          };
+        }) ?? [];
 
       setStaffSettings(mapped);
       setStaffLoading(false);
@@ -130,7 +143,7 @@ export function SettingsPage() {
     loadStaff();
   }, []);
 
-  const settingSections = [
+  const settingSections: SettingSection[] = [
     {
       icon: Database,
       title: "Data Management",
@@ -204,6 +217,26 @@ export function SettingsPage() {
       ...prev,
       [field]: value,
     }));
+  };
+
+  const openDeleteBranchConfirm = () => {
+    if (editingBranchId === null) return;
+    const branchName =
+      branchSettings.find((branch) => branch.id === editingBranchId)?.name ??
+      "this branch";
+    setDeleteTarget({ type: "branch", id: editingBranchId, name: branchName });
+  };
+
+  const openDeleteStaffConfirm = () => {
+    if (editingStaffId === null) return;
+    const staffName =
+      staffSettings.find((staff) => staff.id === editingStaffId)?.username ??
+      "this staff member";
+    setDeleteTarget({ type: "staff", id: editingStaffId, name: staffName });
+  };
+
+  const closeDeleteConfirm = () => {
+    setDeleteTarget(null);
   };
 
   const handleBranchSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -334,15 +367,27 @@ export function SettingsPage() {
                 username: data.username,
                 role: data.role as StaffRole,
                 branchId: data.branch_id,
-                branchName: data.branch?.branch_name ?? "Unknown",
+                branchName: unwrapRelation(data.branch)?.branch_name ?? "Unknown",
               }
             : staff,
         ),
       );
     } else {
+      let staffId: string;
+      try {
+        staffId = generateStaffId();
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Unable to generate staff ID.";
+        setStaffError(message);
+        setIsStaffSaving(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("staff")
         .insert({
+          staff_id: staffId,
           branch_id: Number(staffForm.branchId),
           username: staffForm.username,
           role: staffForm.role,
@@ -366,7 +411,7 @@ export function SettingsPage() {
           username: data.username,
           role: data.role as StaffRole,
           branchId: data.branch_id,
-          branchName: data.branch?.branch_name ?? "Unknown",
+          branchName: unwrapRelation(data.branch)?.branch_name ?? "Unknown",
         },
       ]);
     }
@@ -375,628 +420,122 @@ export function SettingsPage() {
     closeStaffModal();
   };
 
-  const handleDeleteBranch = async () => {
-    if (editingBranchId === null) return;
-    const branchName = branchSettings.find(
-      (branch) => branch.id === editingBranchId,
-    )?.name;
-    const confirmed = window.confirm(
-      `Delete branch "${branchName ?? "this branch"}"? This cannot be undone.`,
-    );
-    if (!confirmed) return;
-
+  const handleDeleteBranch = async (branchId: number) => {
     setIsDeleting(true);
     setBranchError("");
     const { error } = await supabase
       .from("branches")
       .delete()
-      .eq("branch_id", editingBranchId);
+      .eq("branch_id", branchId);
 
     if (error) {
       setBranchError(error.message);
       setIsDeleting(false);
-      return;
+      return false;
     }
 
     setBranchSettings((prev) =>
-      prev.filter((branch) => branch.id !== editingBranchId),
+      prev.filter((branch) => branch.id !== branchId),
     );
     setIsDeleting(false);
     closeBranchModal();
+    return true;
   };
 
-  const handleDeleteStaff = async () => {
-    if (editingStaffId === null) return;
-    const staffName = staffSettings.find(
-      (staff) => staff.id === editingStaffId,
-    )?.username;
-    const confirmed = window.confirm(
-      `Delete staff "${staffName ?? "this staff member"}"? This cannot be undone.`,
-    );
-    if (!confirmed) return;
-
+  const handleDeleteStaff = async (staffId: string) => {
     setIsStaffDeleting(true);
     setStaffError("");
     const { error } = await supabase
       .from("staff")
       .delete()
-      .eq("staff_id", editingStaffId);
+      .eq("staff_id", staffId);
 
     if (error) {
       setStaffError(error.message);
       setIsStaffDeleting(false);
-      return;
+      return false;
     }
 
     setStaffSettings((prev) =>
-      prev.filter((staff) => staff.id !== editingStaffId),
+      prev.filter((staff) => staff.id !== staffId),
     );
     setIsStaffDeleting(false);
     closeStaffModal();
+    return true;
   };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    if (deleteTarget.type === "branch") {
+      await handleDeleteBranch(deleteTarget.id);
+    } else {
+      await handleDeleteStaff(deleteTarget.id);
+    }
+    closeDeleteConfirm();
+  };
+
+  const deleteBusy =
+    deleteTarget?.type === "branch"
+      ? isDeleting
+      : deleteTarget?.type === "staff"
+        ? isStaffDeleting
+        : false;
+
+  const isBranchModalOpen = isAddModalOpen || editingBranchId !== null;
+  const isBranchEditing = editingBranchId !== null;
+  const isStaffModalOpenComputed = isStaffModalOpen || editingStaffId !== null;
+  const isStaffEditing = editingStaffId !== null;
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-[#1B211A] mb-2">Settings</h1>
-        <p className="text-[#628141]">Manage your LPG Trading dashboard preferences</p>
-      </div>
-
-      {/* Main Settings Sections */}
-      <div className="space-y-6">
-        {settingSections.map((section, index) => (
-          <div
-            key={index}
-            className="p-6 rounded-3xl bg-[#FFFDF1]"
-            style={{
-              boxShadow: '0 8px 32px rgba(98, 129, 65, 0.15), inset 0 2px 8px rgba(255, 255, 255, 0.6), inset 0 -2px 8px rgba(98, 129, 65, 0.05)',
-            }}
-          >
-            {/* Section Header */}
-            <div className="flex items-center gap-4 mb-6">
-              <div 
-                className="p-3 rounded-2xl bg-gradient-to-br from-[#628141] to-[#8BAE66]"
-                style={{
-                  boxShadow: '0 4px 16px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)',
-                }}
-              >
-                <section.icon className="w-6 h-6 text-[#FFFDF1]" />
-              </div>
-              <div>
-                <h3 className="text-[#1B211A]">{section.title}</h3>
-                <p className="text-[#628141] text-sm">{section.description}</p>
-              </div>
-            </div>
-
-            {/* Fields */}
-            {section.fields && (
-              <div className="space-y-4">
-                {section.fields.map((field, idx) => (
-                  <div key={idx}>
-                    <label className="text-[#628141] text-sm mb-2 block">{field.label}</label>
-                    <input
-                      type={field.type}
-                      defaultValue={field.value}
-                      readOnly={field.readonly}
-                      className={`w-full px-4 py-3 rounded-2xl bg-[#EBD5AB]/20 text-[#1B211A] border-none outline-none ${field.readonly ? 'cursor-not-allowed opacity-70' : ''}`}
-                      style={{
-                        boxShadow: 'inset 0 2px 6px rgba(98, 129, 65, 0.1)',
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Toggles */}
-            {section.toggles && (
-              <div className="space-y-4 mt-4">
-                {section.toggles.map((toggle, idx) => (
-                  <div key={idx} className="flex items-center justify-between">
-                    <span className="text-[#1B211A]">{toggle.label}</span>
-                    <button
-                      onClick={() => toggle.setter(!toggle.state)}
-                      className={`relative w-14 h-7 rounded-full transition-colors ${
-                        toggle.state ? 'bg-gradient-to-r from-[#628141] to-[#8BAE66]' : 'bg-[#EBD5AB]'
-                      }`}
-                      style={{
-                        boxShadow: toggle.state 
-                          ? '0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)'
-                          : 'inset 0 2px 6px rgba(98, 129, 65, 0.1)',
-                      }}
-                    >
-                      <span
-                        className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-[#FFFDF1] transition-transform ${
-                          toggle.state ? 'translate-x-7' : 'translate-x-0'
-                        }`}
-                        style={{
-                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-                        }}
-                      />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Branch Management */}
-      <div
-        className="p-6 rounded-3xl bg-[#FFFDF1]"
-        style={{
-          boxShadow: '0 8px 32px rgba(98, 129, 65, 0.15), inset 0 2px 8px rgba(255, 255, 255, 0.6), inset 0 -2px 8px rgba(98, 129, 65, 0.05)',
-        }}
-      >
-        <div className="flex items-start justify-between mb-6 gap-4">
-          <div className="flex items-center gap-4">
-            <div 
-              className="p-3 rounded-2xl bg-gradient-to-br from-[#628141] to-[#8BAE66]"
-              style={{
-                boxShadow: '0 4px 16px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)',
-              }}
-            >
-              <Globe className="w-6 h-6 text-[#FFFDF1]" />
-            </div>
-            <div>
-              <h3 className="text-[#1B211A]">Branch Management</h3>
-              <p className="text-[#628141] text-sm">Overview and settings for all branches</p>
-            </div>
-          </div>
-          <button
-            onClick={openAddBranchModal}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1] text-sm flex items-center gap-2"
-            style={{
-              boxShadow: '0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)',
-            }}
-          >
-            <Plus className="w-4 h-4" />
-            Add Branch
-          </button>
-        </div>
-
-        {branchError && (
-          <div className="mb-4 rounded-2xl bg-red-100/70 px-4 py-3 text-sm text-red-700">
-            {branchError}
-          </div>
-        )}
-        {branchLoading ? (
-          <div className="rounded-2xl bg-[#EBD5AB]/15 px-4 py-6 text-center text-sm text-[#628141]">
-            Loading branches...
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {branchSettings.map((branch) => (
-              <div
-                key={branch.id}
-                className="p-4 rounded-2xl bg-gradient-to-br from-[#628141]/10 to-[#8BAE66]/10"
-                style={{
-                  boxShadow: 'inset 0 2px 6px rgba(98, 129, 65, 0.1)',
-                }}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-[#1B211A]">{branch.name}</h4>
-                  <span className="px-3 py-1 rounded-full bg-[#8BAE66]/30 text-[#628141] text-xs">
-                    Active
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[#628141] text-sm">{branch.location}</p>
-                  <p className="text-[#628141] text-sm">{branch.contactNo}</p>
-                </div>
-                <button 
-                  onClick={() => openEditBranchModal(branch)}
-                  className="mt-3 w-full px-4 py-2 rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1] text-sm"
-                  style={{
-                    boxShadow: '0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)',
-                  }}
-                >
-                  Manage Branch
-                </button>
-              </div>
-            ))}
-            {!branchSettings.length && (
-              <div className="col-span-full rounded-2xl bg-[#EBD5AB]/15 px-4 py-6 text-center text-sm text-[#628141]">
-                No branches found yet.
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Staff Management */}
-      <div
-        className="p-6 rounded-3xl bg-[#FFFDF1]"
-        style={{
-          boxShadow: '0 8px 32px rgba(98, 129, 65, 0.15), inset 0 2px 8px rgba(255, 255, 255, 0.6), inset 0 -2px 8px rgba(98, 129, 65, 0.05)',
-        }}
-      >
-        <div className="flex items-start justify-between mb-6 gap-4">
-          <div className="flex items-center gap-4">
-            <div
-              className="p-3 rounded-2xl bg-gradient-to-br from-[#628141] to-[#8BAE66]"
-              style={{
-                boxShadow: '0 4px 16px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)',
-              }}
-            >
-              <Users className="w-6 h-6 text-[#FFFDF1]" />
-            </div>
-            <div>
-              <h3 className="text-[#1B211A]">Staff Management</h3>
-              <p className="text-[#628141] text-sm">Manage staff access and assignments</p>
-            </div>
-          </div>
-          <button
-            onClick={openAddStaffModal}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1] text-sm flex items-center gap-2"
-            style={{
-              boxShadow: '0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)',
-            }}
-          >
-            <Plus className="w-4 h-4" />
-            Add Staff
-          </button>
-        </div>
-
-        {staffError && (
-          <div className="mb-4 rounded-2xl bg-red-100/70 px-4 py-3 text-sm text-red-700">
-            {staffError}
-          </div>
-        )}
-        {staffLoading ? (
-          <div className="rounded-2xl bg-[#EBD5AB]/15 px-4 py-6 text-center text-sm text-[#628141]">
-            Loading staff...
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {staffSettings.map((staff) => (
-              <div
-                key={staff.id}
-                className="p-4 rounded-2xl bg-gradient-to-br from-[#628141]/10 to-[#8BAE66]/10"
-                style={{
-                  boxShadow: 'inset 0 2px 6px rgba(98, 129, 65, 0.1)',
-                }}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-[#1B211A]">{staff.username}</h4>
-                  <span className="px-3 py-1 rounded-full bg-[#8BAE66]/30 text-[#628141] text-xs">
-                    {staff.role}
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[#628141] text-sm">{staff.branchName}</p>
-                  <p className="text-[#628141] text-xs">
-                    ID: {staff.id.slice(0, 8)}...
-                  </p>
-                </div>
-                <button
-                  onClick={() => openEditStaffModal(staff)}
-                  className="mt-3 w-full px-4 py-2 rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1] text-sm"
-                  style={{
-                    boxShadow: '0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)',
-                  }}
-                >
-                  Manage Staff
-                </button>
-              </div>
-            ))}
-            {!staffSettings.length && (
-              <div className="col-span-full rounded-2xl bg-[#EBD5AB]/15 px-4 py-6 text-center text-sm text-[#628141]">
-                No staff records found yet.
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {(isAddModalOpen || editingBranchId !== null) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1B211A]/40 p-4">
-          <div
-            className="w-full max-w-xl rounded-3xl bg-[#FFFDF1] p-6"
-            style={{
-              boxShadow:
-                "0 12px 48px rgba(27, 33, 26, 0.3), inset 0 2px 8px rgba(255, 255, 255, 0.8), inset 0 -2px 8px rgba(98, 129, 65, 0.1)",
-            }}
-          >
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h3 className="text-[#1B211A]">
-                  {editingBranchId !== null ? "Edit Branch" : "Add Branch"}
-                </h3>
-                <p className="text-sm text-[#628141]">
-                  {editingBranchId !== null
-                    ? "Update branch details and contact info."
-                    : "Create a new branch profile for management."}
-                </p>
-              </div>
-              <button
-                onClick={closeBranchModal}
-                className="rounded-xl p-2 text-[#628141] hover:bg-[#EBD5AB]/30"
-                title="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form className="space-y-4" onSubmit={handleBranchSubmit}>
-              <div>
-                <label className="mb-2 block text-sm text-[#628141]">
-                  Branch Name
-                </label>
-                <input
-                  type="text"
-                  value={branchForm.name}
-                  onChange={(event) =>
-                    handleBranchFormChange("name", event.target.value)
-                  }
-                  className="w-full rounded-2xl bg-[#EBD5AB]/20 px-4 py-3 text-[#1B211A] outline-none"
-                  style={{
-                    boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-                  }}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-[#628141]">
-                  Location
-                </label>
-                <input
-                  type="text"
-                  value={branchForm.location}
-                  onChange={(event) =>
-                    handleBranchFormChange("location", event.target.value)
-                  }
-                  className="w-full rounded-2xl bg-[#EBD5AB]/20 px-4 py-3 text-[#1B211A] outline-none"
-                  style={{
-                    boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-                  }}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-[#628141]">
-                  Contact Number
-                </label>
-                <input
-                  type="text"
-                  value={branchForm.contactNo}
-                  onChange={(event) =>
-                    handleBranchFormChange("contactNo", event.target.value)
-                  }
-                  className="w-full rounded-2xl bg-[#EBD5AB]/20 px-4 py-3 text-[#1B211A] outline-none"
-                  style={{
-                    boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-                  }}
-                  required
-                />
-              </div>
-
-              {branchError && (
-                <div className="rounded-2xl bg-red-100/70 px-4 py-3 text-sm text-red-700">
-                  {branchError}
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                {editingBranchId !== null ? (
-                  <button
-                    type="button"
-                    onClick={handleDeleteBranch}
-                    disabled={isDeleting || isSaving}
-                    className="rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] px-4 py-2 text-[#FFFDF1]"
-                    style={{
-                      boxShadow:
-                        "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-                    }}
-                  >
-                    {isDeleting ? "Deleting..." : "Delete Branch"}
-                  </button>
-                ) : (
-                  <span />
-                )}
-                <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={closeBranchModal}
-                    className="rounded-xl bg-[#8BAE66]/20 px-4 py-2 text-[#628141]"
-                    style={{
-                      boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSaving || isDeleting}
-                    className="rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] px-4 py-2 text-[#FFFDF1]"
-                    style={{
-                      boxShadow:
-                        "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-                    }}
-                  >
-                    {isSaving
-                      ? "Saving..."
-                      : editingBranchId !== null
-                        ? "Save Changes"
-                        : "Add Branch"}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {(isStaffModalOpen || editingStaffId !== null) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1B211A]/40 p-4">
-          <div
-            className="w-full max-w-xl rounded-3xl bg-[#FFFDF1] p-6"
-            style={{
-              boxShadow:
-                "0 12px 48px rgba(27, 33, 26, 0.3), inset 0 2px 8px rgba(255, 255, 255, 0.8), inset 0 -2px 8px rgba(98, 129, 65, 0.1)",
-            }}
-          >
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h3 className="text-[#1B211A]">
-                  {editingStaffId !== null ? "Edit Staff" : "Add Staff"}
-                </h3>
-                <p className="text-sm text-[#628141]">
-                  {editingStaffId !== null
-                    ? "Update staff role and branch assignment."
-                    : "Create a staff profile for a new team member."}
-                </p>
-              </div>
-              <button
-                onClick={closeStaffModal}
-                className="rounded-xl p-2 text-[#628141] hover:bg-[#EBD5AB]/30"
-                title="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form className="space-y-4" onSubmit={handleStaffSubmit}>
-              <div>
-                <label className="mb-2 block text-sm text-[#628141]">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  value={staffForm.username}
-                  onChange={(event) =>
-                    handleStaffFormChange("username", event.target.value)
-                  }
-                  className="w-full rounded-2xl bg-[#EBD5AB]/20 px-4 py-3 text-[#1B211A] outline-none"
-                  style={{
-                    boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-                  }}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-[#628141]">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  value={staffForm.password}
-                  onChange={(event) =>
-                    handleStaffFormChange("password", event.target.value)
-                  }
-                  className="w-full rounded-2xl bg-[#EBD5AB]/20 px-4 py-3 text-[#1B211A] outline-none"
-                  style={{
-                    boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-                  }}
-                  placeholder={
-                    editingStaffId !== null ? "Leave blank to keep current" : ""
-                  }
-                  required={editingStaffId === null}
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-[#628141]">
-                  Role
-                </label>
-                <select
-                  value={staffForm.role}
-                  onChange={(event) =>
-                    handleStaffFormChange("role", event.target.value)
-                  }
-                  className="w-full rounded-2xl bg-[#EBD5AB]/20 px-4 py-3 text-[#1B211A] outline-none"
-                  style={{
-                    boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-                  }}
-                >
-                  <option value="Admin">Admin</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Staff">Staff</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-[#628141]">
-                  Branch
-                </label>
-                <select
-                  value={staffForm.branchId}
-                  onChange={(event) =>
-                    handleStaffFormChange("branchId", event.target.value)
-                  }
-                  className="w-full rounded-2xl bg-[#EBD5AB]/20 px-4 py-3 text-[#1B211A] outline-none"
-                  style={{
-                    boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-                  }}
-                >
-                  <option value="">Select a branch</option>
-                  {branchSettings.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {staffError && (
-                <div className="rounded-2xl bg-red-100/70 px-4 py-3 text-sm text-red-700">
-                  {staffError}
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                {editingStaffId !== null ? (
-                  <button
-                    type="button"
-                    onClick={handleDeleteStaff}
-                    disabled={isStaffDeleting || isStaffSaving}
-                    className="rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] px-4 py-2 text-[#FFFDF1]"
-                    style={{
-                      boxShadow:
-                        "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-                    }}
-                  >
-                    {isStaffDeleting ? "Deleting..." : "Delete Staff"}
-                  </button>
-                ) : (
-                  <span />
-                )}
-                <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={closeStaffModal}
-                    className="rounded-xl bg-[#8BAE66]/20 px-4 py-2 text-[#628141]"
-                    style={{
-                      boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isStaffSaving || isStaffDeleting}
-                    className="rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] px-4 py-2 text-[#FFFDF1]"
-                    style={{
-                      boxShadow:
-                        "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-                    }}
-                  >
-                    {isStaffSaving
-                      ? "Saving..."
-                      : editingStaffId !== null
-                        ? "Save Changes"
-                        : "Add Staff"}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
+      <SettingsHeader />
+      <SettingsSectionList sections={settingSections} />
+      <BranchManagement
+        branches={branchSettings}
+        loading={branchLoading}
+        error={branchError}
+        onAdd={openAddBranchModal}
+        onEdit={openEditBranchModal}
+      />
+      <StaffManagement
+        staff={staffSettings}
+        loading={staffLoading}
+        error={staffError}
+        onAdd={openAddStaffModal}
+        onEdit={openEditStaffModal}
+      />
+      <BranchModal
+        open={isBranchModalOpen}
+        isEditing={isBranchEditing}
+        branchForm={branchForm}
+        branchError={branchError}
+        isSaving={isSaving}
+        isDeleting={isDeleting}
+        onClose={closeBranchModal}
+        onSubmit={handleBranchSubmit}
+        onFieldChange={handleBranchFormChange}
+        onDelete={openDeleteBranchConfirm}
+      />
+      <StaffModal
+        open={isStaffModalOpenComputed}
+        isEditing={isStaffEditing}
+        staffForm={staffForm}
+        staffError={staffError}
+        isSaving={isStaffSaving}
+        isDeleting={isStaffDeleting}
+        branches={branchSettings}
+        onClose={closeStaffModal}
+        onSubmit={handleStaffSubmit}
+        onFieldChange={handleStaffFormChange}
+        onDelete={openDeleteStaffConfirm}
+      />
+      {deleteTarget && (
+        <DeleteConfirmModal
+          target={deleteTarget}
+          isBusy={deleteBusy}
+          onCancel={closeDeleteConfirm}
+          onConfirm={handleConfirmDelete}
+        />
       )}
     </div>
   );
