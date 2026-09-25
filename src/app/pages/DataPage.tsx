@@ -6,6 +6,7 @@ import { ExportReportModal } from "./Data/ExportReportModal";
 import { InventorySection } from "./Data/InventorySection";
 import { InventoryModal } from "./Data/InventoryModal";
 import { ProductModal } from "./Data/ProductModal";
+import { ProductCatalog } from "./Data/ProductCatalog";
 import { TransactionsTable } from "./Data/TransactionsTable";
 import type {
   BranchOption,
@@ -21,9 +22,14 @@ import type {
   StatusTone,
   TransactionRecord,
 } from "./Data/types";
-import { unwrapRelation } from "../utils/relations";
+import {
+  appService,
+  type BranchDTO,
+  type ProductDTO,
+  type TransactionDTO,
+  type CatalogPrice,
+} from "../services/appService";
 import { useAuth } from "../utils/auth";
-import { supabase } from "../utils/supabase";
 
 type FlowStatus = "None" | "Few" | "Plenty";
 const MAX_FLOW_QTY = 40;
@@ -72,48 +78,12 @@ const getFlowQuantities = (
   };
 };
 
-const getStatusQuantity = (
-  stock: number,
-  branch: string,
-  activeStatus: InventoryStatusTab,
-  branchStockTotals: Record<string, number>,
-) => {
-  if (activeStatus === "Delivered" || activeStatus === "Returned") {
-    const { netDeliveredQty, returnedQty } = getFlowQuantities(
-      stock,
-      branch,
-      branchStockTotals,
-    );
+const getStatusQuantity = (stock: number, _branch: string, activeStatus: InventoryStatusTab, _branchStockTotals: Record<string, number>) => activeStatus === "Stock" ? stock : 0;
 
-    if (activeStatus === "Returned") return returnedQty;
-    return netDeliveredQty;
-  }
-
-  return stock;
-};
-
-const getInventoryStatusMeta = (
-  total: number,
-  activeStatus: InventoryStatusTab,
-  outgoingTotal = 0,
-  returnedTotal = 0,
-): { label: string; tone: StatusTone } => {
-  if (activeStatus === "Stock") {
-    if (total < 120) return { label: "Low", tone: "low" };
-    if (total < 160) return { label: "Moderate", tone: "moderate" };
-    return { label: "Plenty", tone: "high" };
-  }
-
-  if (activeStatus === "Returned") {
-    if (returnedTotal === 0) return { label: "None", tone: "low" };
-    if (outgoingTotal > 0 && returnedTotal >= outgoingTotal) {
-      return { label: "Recovered", tone: "high" };
-    }
-    return { label: "Partial", tone: "moderate" };
-  }
-
-  if (total === 0) return { label: "None", tone: "low" };
-  if (total < 20) return { label: "Few", tone: "moderate" };
+const getInventoryStatusMeta = (total: number, activeStatus: InventoryStatusTab): { label: string; tone: StatusTone } => {
+  if (activeStatus !== "Stock") return { label: "None", tone: "low" };
+  if (total < 120) return { label: "Low", tone: "low" };
+  if (total < 160) return { label: "Moderate", tone: "moderate" };
   return { label: "Plenty", tone: "high" };
 };
 
@@ -138,7 +108,7 @@ const REPORT_MONTHS = [
   "Dec",
 ];
 
-const formatAmount = (amount: number) => `₱${amount.toLocaleString("en-PH")}`;
+const formatAmount = (amount: number) => `â‚±${amount.toLocaleString("en-PH")}`;
 const toLocalDate = (value: string) => new Date(`${value}T00:00:00`);
 const getMonthLabel = (date: Date) => REPORT_MONTHS[date.getMonth()] ?? "";
 const EMPTY_INVENTORY_FORM: InventoryForm = {
@@ -170,6 +140,8 @@ export function DataPage() {
   const [inventoryError, setInventoryError] = useState("");
   const [branchOptions, setBranchOptions] = useState<BranchOption[]>([]);
   const [productOptions, setProductOptions] = useState<ProductOption[]>([]);
+  const [catalogPrices, setCatalogPrices] = useState<CatalogPrice[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<ProductDTO[]>([]);
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [productForm, setProductForm] = useState<ProductForm>(EMPTY_PRODUCT_FORM);
   const [productMutationError, setProductMutationError] = useState("");
@@ -184,10 +156,14 @@ export function DataPage() {
   const [inventoryDeleteTarget, setInventoryDeleteTarget] =
     useState<InventoryDeleteTarget | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [selectedBranchId, setSelectedBranchId] = useState("");
+  const [transactionSearch, setTransactionSearch] = useState("");
+  const [transactionType, setTransactionType] = useState("");
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [transactionsError, setTransactionsError] = useState("");
-  const [activeTab, setActiveTab] = useState<"inventory" | "transactions">(
+  const [activeTab, setActiveTab] = useState<"inventory" | "transactions" | "catalog">(
     "inventory",
   );
   const [activeInventoryStatus, setActiveInventoryStatus] =
@@ -205,171 +181,146 @@ export function DataPage() {
   const loadInventory = async () => {
     setInventoryLoading(true);
     setInventoryError("");
-    const { data, error } = await supabase
-      .from("branch_stock")
-      .select(
-        "stock_id, quantity, reorder_level, branch:branches(branch_id, branch_name), product:products(product_id, product_name, weight_kg)",
-      );
+    try {
+      const rows = await appService.inventory.list();
+      const mapped: InventoryItem[] = rows.map((row) => ({
+        stockId: row.stockId,
+        branchId: row.branchId,
+        branchName: row.branchName || "Unknown",
+        productId: row.productId,
+        productName: row.productName || "Unknown",
+        weightKg: row.weightKg,
+        quantity: row.quantity,
+        reorderLevel: row.reorderLevel,
+      }));
 
-    if (error) {
-      setInventoryError(error.message);
+      const columnMap = new Map<number, ProductColumn>();
+      mapped.forEach((item) => {
+        if (!columnMap.has(item.productId)) {
+          columnMap.set(item.productId, {
+            id: item.productId,
+            label:
+              item.weightKg !== null ? `${item.weightKg} kg` : item.productName,
+            weight: item.weightKg,
+          });
+        }
+      });
+
+      const columns = Array.from(columnMap.values()).sort((a, b) => {
+        const weightDelta = (a.weight ?? 0) - (b.weight ?? 0);
+        if (weightDelta !== 0) return weightDelta;
+        return a.label.localeCompare(b.label);
+      });
+
+      setInventoryItems(mapped);
+      setInventoryColumns(columns);
+    } catch (error) {
+      setInventoryError(
+        error instanceof Error ? error.message : "Unable to load inventory.",
+      );
       setInventoryItems([]);
       setInventoryColumns([]);
+    } finally {
       setInventoryLoading(false);
-      return;
     }
-
-    const mapped =
-      (data ?? [])
-        .map((row) => {
-          const branch = unwrapRelation(row.branch);
-          const product = unwrapRelation(row.product);
-          if (!branch || !product) return null;
-          return {
-            stockId: row.stock_id,
-            branchId: branch.branch_id,
-            branchName: branch.branch_name,
-            productId: product.product_id,
-            productName: product.product_name,
-            weightKg: product.weight_kg,
-            quantity: row.quantity,
-            reorderLevel: row.reorder_level,
-          };
-        })
-        .filter((item): item is InventoryItem => Boolean(item)) ?? [];
-
-    const columnMap = new Map<number, ProductColumn>();
-    mapped.forEach((item) => {
-      if (!columnMap.has(item.productId)) {
-        columnMap.set(item.productId, {
-          id: item.productId,
-          label:
-            item.weightKg !== null ? `${item.weightKg} kg` : item.productName,
-          weight: item.weightKg,
-        });
-      }
-    });
-
-    const columns = Array.from(columnMap.values()).sort((a, b) => {
-      const weightDelta = (a.weight ?? 0) - (b.weight ?? 0);
-      if (weightDelta !== 0) return weightDelta;
-      return a.label.localeCompare(b.label);
-    });
-
-    setInventoryItems(mapped);
-    setInventoryColumns(columns);
-    setInventoryLoading(false);
   };
 
   const loadInventoryMetadata = async () => {
-    const [{ data: branchData, error: branchError }, { data: productData, error: productError }] =
-      await Promise.all([
-        supabase.from("branches").select("branch_id, branch_name").order("branch_name"),
-        supabase
-          .from("products")
-          .select("product_id, product_name, weight_kg, active")
-          .eq("active", true)
-          .order("product_name"),
+    try {
+      const [branchData, productData] = await Promise.all([
+        appService.branches.list(),
+        appService.products.listActive(),
       ]);
-
-    if (branchError) {
-      setInventoryError(branchError.message);
-      setBranchOptions([]);
-    } else {
       setBranchOptions(
-        branchData?.map((branch) => ({
-          id: branch.branch_id,
-          name: branch.branch_name,
-        })) ?? [],
+        branchData.map((branch: BranchDTO) => ({
+          id: branch.id,
+          name: branch.name,
+        })),
       );
-    }
-
-    if (productError) {
-      setInventoryError(productError.message);
-      setProductOptions([]);
-    } else {
       setProductOptions(
-        productData?.map((product) => ({
-          id: product.product_id,
-          label: product.product_name,
-          weight: product.weight_kg,
-        })) ?? [],
+        productData.map((product: ProductDTO) => ({
+          id: product.id,
+          label: product.name,
+          weight: product.weightKg,
+        })),
+      );
+    } catch (error) {
+      setInventoryError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load inventory options.",
       );
     }
   };
 
   useEffect(() => {
     void loadInventory();
-  }, []);
+  }, [refreshTick]);
 
   useEffect(() => {
     void loadInventoryMetadata();
+  }, [refreshTick]);
+
+  useEffect(() => {
+    void Promise.all([appService.catalog.listPrices(), appService.products.listAll()]).then(([priceRows, productRows]) => { setCatalogPrices(priceRows); setCatalogProducts(productRows); }).catch(() => { setCatalogPrices([]); setCatalogProducts([]); });
+  }, [refreshTick]);
+
+  useEffect(() => {
+    if (activeTab === "catalog" && branchOptions.length) {
+      const bayan = branchOptions.find((branch) => branch.name.toLowerCase() === "bayan") ?? branchOptions[0];
+      setSelectedBranchId(String(bayan.id));
+    }
+  }, [activeTab, branchOptions]);
+
+  useEffect(() => {
+    let interval: number | undefined;
+    const start = () => {
+      if (document.visibilityState === "visible" && interval === undefined) {
+        interval = window.setInterval(() => setRefreshTick((value) => value + 1), 60_000);
+      }
+    };
+    const stop = () => {
+      if (interval !== undefined) { window.clearInterval(interval); interval = undefined; }
+    };
+    const onVisibilityChange = () => { if (document.visibilityState === "hidden") stop(); else start(); };
+    start();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => { stop(); document.removeEventListener("visibilitychange", onVisibilityChange); };
   }, []);
+
+  useEffect(() => {
+    setUserRole(user?.role ?? null);
+  }, [user]);
 
   useEffect(() => {
     const loadTransactions = async () => {
       setTransactionsLoading(true);
       setTransactionsError("");
-      const { data, error } = await supabase
-        .from("sales_transactions")
-        .select(
-          "sales_id, tracking_no, guest_name, subtotal, total, transaction_date, transaction_type, branch:branches(branch_name)",
-        )
-        .order("transaction_date", { ascending: false })
-        .order("sales_id", { ascending: false });
-
-      if (error) {
-        setTransactionsError(error.message);
+      try {
+        const rows = await appService.transactions.list();
+        const mapped: TransactionRecord[] = rows.map((row: TransactionDTO) => ({
+          salesId: row.salesId,
+          trackingNo: row.trackingNo,
+          guestName: row.guestName,
+          branchName: row.branchName || "Unknown",
+          subtotal: row.subtotal,
+          total: row.total,
+          transactionDate: row.transactionDate,
+          transactionType: row.transactionType,
+        }));
+        setTransactions(mapped);
+      } catch (error) {
+        setTransactionsError(
+          error instanceof Error ? error.message : "Unable to load transactions.",
+        );
         setTransactions([]);
+      } finally {
         setTransactionsLoading(false);
-        return;
       }
-
-      const mapped =
-        data?.map((row) => {
-          const branch = unwrapRelation(row.branch);
-          return {
-            salesId: row.sales_id,
-            trackingNo: row.tracking_no,
-            guestName: row.guest_name,
-            branchName: branch?.branch_name ?? "Unknown",
-            subtotal: row.subtotal,
-            total: row.total,
-            transactionDate: row.transaction_date,
-            transactionType: row.transaction_type,
-          };
-        }) ?? [];
-
-      setTransactions(mapped);
-      setTransactionsLoading(false);
     };
 
-    loadTransactions();
-  }, []);
-
-  useEffect(() => {
-    const loadUserRole = async () => {
-      if (!user) {
-        setUserRole(null);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("staff")
-        .select("role")
-        .eq("staff_id", user.id)
-        .maybeSingle();
-
-      if (error) {
-        setUserRole(null);
-        return;
-      }
-
-      setUserRole(data?.role ?? null);
-    };
-
-    void loadUserRole();
-  }, [user]);
+    void loadTransactions();
+  }, [refreshTick]);
 
   const availableYears = useMemo(() => {
     const years = new Set<string>();
@@ -401,12 +352,11 @@ export function DataPage() {
     [inventoryItems],
   );
 
-  const isAdmin = userRole === "Admin";
-
   const inventoryRows = useMemo(() => {
     const rowMap = new Map<string, InventoryRow>();
 
     inventoryItems.forEach((item) => {
+      if (selectedBranchId && item.branchId !== Number(selectedBranchId)) return;
       const existing = rowMap.get(item.branchName);
       const row =
         existing ??
@@ -424,12 +374,7 @@ export function DataPage() {
         branchStockTotals,
       );
 
-      row.quantities[item.productId] = getStatusQuantity(
-        item.quantity,
-        item.branchName,
-        activeInventoryStatus,
-        branchStockTotals,
-      );
+      row.quantities[item.productId] = getStatusQuantity(item.quantity, item.branchName, activeInventoryStatus, branchStockTotals);
       row.outgoingTotal += flowQuantities.outgoingQty;
       row.returnedTotal += flowQuantities.returnedQty;
 
@@ -439,7 +384,7 @@ export function DataPage() {
     });
 
     return Array.from(rowMap.values());
-  }, [activeInventoryStatus, branchStockTotals, inventoryItems]);
+  }, [activeInventoryStatus, branchStockTotals, inventoryItems, selectedBranchId]);
 
   const closeInventoryModal = () => {
     setInventoryModalOpen(false);
@@ -531,35 +476,28 @@ export function DataPage() {
       return;
     }
 
-    const payload = {
-      branch_id: branchId,
-      product_id: productId,
-      quantity,
-      reorder_level: reorderLevel,
-    };
     const existingItem = inventoryItems.find(
       (item) => item.branchId === branchId && item.productId === productId,
     );
     const targetStockId = editingStockId ?? existingItem?.stockId;
 
-    const mutation = targetStockId !== undefined
-      ? supabase
-          .from("branch_stock")
-          .update(payload)
-          .eq("stock_id", targetStockId)
-      : supabase.from("branch_stock").insert(payload);
-
-    const { error } = await mutation;
-
-    if (error) {
-      setInventoryMutationError(error.message);
+    try {
+      await appService.inventory.upsert({
+        ...(targetStockId === undefined ? {} : { stockId: targetStockId }),
+        branchId,
+        productId,
+        quantity,
+        reorderLevel,
+      });
+      await loadInventory();
       setIsInventorySaving(false);
-      return;
+      closeInventoryModal();
+    } catch (error) {
+      setInventoryMutationError(
+        error instanceof Error ? error.message : "Unable to save inventory.",
+      );
+      setIsInventorySaving(false);
     }
-
-    await loadInventory();
-    setIsInventorySaving(false);
-    closeInventoryModal();
   };
 
   const confirmDeleteInventoryItem = async () => {
@@ -568,23 +506,20 @@ export function DataPage() {
     setIsInventoryDeleting(true);
     setInventoryMutationError("");
 
-    const { error } = await supabase
-      .from("branch_stock")
-      .delete()
-      .eq("stock_id", inventoryDeleteTarget.stockId);
-
-    if (error) {
-      setInventoryMutationError(error.message);
+    try {
+      await appService.inventory.delete(inventoryDeleteTarget.stockId);
+      await loadInventory();
       setIsInventoryDeleting(false);
-      return;
-    }
+      setInventoryDeleteTarget(null);
 
-    await loadInventory();
-    setIsInventoryDeleting(false);
-    setInventoryDeleteTarget(null);
-
-    if (editingStockId === inventoryDeleteTarget.stockId) {
-      closeInventoryModal();
+      if (editingStockId === inventoryDeleteTarget.stockId) {
+        closeInventoryModal();
+      }
+    } catch (error) {
+      setInventoryMutationError(
+        error instanceof Error ? error.message : "Unable to delete inventory.",
+      );
+      setIsInventoryDeleting(false);
     }
   };
 
@@ -630,22 +565,18 @@ export function DataPage() {
       return;
     }
 
-    const { error } = await supabase.from("products").insert({
-      product_name: name,
-      weight_kg: weightKg,
-      active: true,
-    });
-
-    if (error) {
-      setProductMutationError(error.message);
+    try {
+      await appService.products.create({ name, weightKg });
+      await loadInventoryMetadata();
+      await loadInventory();
       setIsProductSaving(false);
-      return;
+      closeProductModal();
+    } catch (error) {
+      setProductMutationError(
+        error instanceof Error ? error.message : "Unable to create the product.",
+      );
+      setIsProductSaving(false);
     }
-
-    await loadInventoryMetadata();
-    await loadInventory();
-    setIsProductSaving(false);
-    closeProductModal();
   };
 
   const generateWeeklyReport = () => {
@@ -788,11 +719,50 @@ export function DataPage() {
     setIsExportModalOpen(false);
   };
 
+  const handleCatalogProductEdit = async (product: ProductDTO) => {
+    const name = window.prompt("Product name", product.name);
+    if (name === null) return;
+    const weight = Number(window.prompt("Weight in kg", String(product.weightKg)));
+    if (!name.trim() || !Number.isFinite(weight) || weight <= 0) return;
+    await appService.products.update(product.id, { name, weightKg: weight });
+    setProductOptions((current) => current.map((item) => item.id === product.id ? { ...item, name: name.trim(), weightKg: weight } : item));
+  };
+  const handleCatalogProductArchive = async (product: ProductDTO) => {
+    if (!window.confirm(`Archive ${product.name}?`)) return;
+    await appService.products.delete(product.id);
+    setProductOptions((current) => current.filter((item) => item.id !== product.id));
+  };
+
+  const handleCatalogPriceSave = async (branchId: number, productId: number, price: number) => {
+    await appService.catalog.updatePrice(branchId, productId, price);
+    setCatalogPrices((current) => current.map((row) => row.branchId === branchId && row.productId === productId ? { ...row, price } : row));
+  };
+
+  const visibleTransactions = transactions.filter((transaction) => {
+    const branchMatches = !selectedBranchId || branchOptions.find((option) => option.name === transaction.branchName)?.id === Number(selectedBranchId);
+    const query = transactionSearch.trim().toLowerCase();
+    const searchMatches = !query || [transaction.guestName, transaction.trackingNo ?? "", transaction.branchName, transaction.transactionType].some((value) => value.toLowerCase().includes(query));
+    const typeMatches = !transactionType || transaction.transactionType === transactionType;
+    return branchMatches && searchMatches && typeMatches;
+  });
+
   return (
     <div className="space-y-8">
       <DataHeader />
       <DataTabs activeTab={activeTab} onChange={setActiveTab} />
-      <DataControls onOpenExport={() => setIsExportModalOpen(true)} />
+      <DataControls
+        onOpenExport={() => setIsExportModalOpen(true)}
+        branchOptions={branchOptions}
+        selectedBranchId={selectedBranchId}
+        showBranchFilter={activeTab === "catalog"}
+        onBranchChange={setSelectedBranchId}
+        showTransactionSearch={activeTab === "transactions"}
+        searchTerm={transactionSearch}
+        onSearchTermChange={setTransactionSearch}
+        transactionType={transactionType}
+        onTransactionTypeChange={setTransactionType}
+        onRefresh={() => setRefreshTick((value) => value + 1)}
+      />
       {activeTab === "inventory" ? (
         <InventorySection
           inventoryColumns={inventoryColumns}
@@ -807,13 +777,22 @@ export function DataPage() {
           getInventoryStatusMeta={getInventoryStatusMeta}
           getStatusBadgeClass={getStatusBadgeClass}
         />
-      ) : (
+      ) : activeTab === "transactions" ? (
         <TransactionsTable
-          transactions={transactions}
+          transactions={visibleTransactions}
           loading={transactionsLoading}
           error={transactionsError}
           formatAmount={formatAmount}
           formatDisplayDate={formatDisplayDate}
+        />
+      ) : (
+        <ProductCatalog
+          prices={catalogPrices}
+          products={catalogProducts}
+          selectedBranchId={selectedBranchId}
+          onSave={handleCatalogPriceSave}
+          onAddProduct={openCreateProduct}
+          onEditProduct={(product) => void handleCatalogProductEdit(product)}
         />
       )}
 

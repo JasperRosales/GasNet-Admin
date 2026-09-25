@@ -1,3 +1,4 @@
+import { Pencil } from "lucide-react";
 import type {
   InventoryRow,
   InventoryStatusTab,
@@ -12,8 +13,8 @@ interface InventorySectionProps {
   inventoryError: string;
   activeStatus: InventoryStatusTab;
   onStatusChange: (status: InventoryStatusTab) => void;
-  onAddInventoryData: () => void;
-  onCreateProduct: () => void;
+  onAddInventoryData?: () => void;
+  onCreateProduct?: () => void;
   onEditInventoryRow: (branchId: number) => void;
   getInventoryStatusMeta: (
     total: number,
@@ -70,29 +71,7 @@ export function InventorySection({
           ))}
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={onCreateProduct}
-            className="rounded-2xl bg-[#8BAE66]/20 px-4 py-2 text-[#628141]"
-            style={{
-              boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
-            }}
-          >
-            Create Product
-          </button>
-          <button
-            type="button"
-            onClick={onAddInventoryData}
-            className="rounded-2xl bg-gradient-to-r from-[#628141] to-[#8BAE66] px-4 py-2 text-[#FFFDF1] disabled:opacity-50"
-            style={{
-              boxShadow:
-                "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-            }}
-          >
-            Add Inventory Data
-          </button>
-        </div>
+        <div />
       </div>
       <div
         className="rounded-3xl bg-[#FFFDF1] overflow-hidden"
@@ -189,9 +168,9 @@ export function InventorySection({
                         <button
                           type="button"
                           onClick={() => onEditInventoryRow(row.branchId)}
-                          className="rounded-xl bg-[#8BAE66]/20 px-3 py-2 text-sm text-[#628141]"
+                          className="inline-flex items-center gap-2 rounded-xl bg-[#EBD5AB]/35 px-4 py-2.5 text-sm font-semibold text-[#628141] transition hover:bg-[#EBD5AB]/55" style={{ boxShadow: "0 4px 12px rgba(98,129,65,.3), inset 0 2px 6px rgba(255,255,255,.2)" }}
                         >
-                          Edit
+                          <Pencil className="h-4 w-4" /> Edit
                         </button>
                       </td>
                     </tr>

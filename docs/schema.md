@@ -1,203 +1,88 @@
-# GasNet POS Database Schema (Idempotent)
+# GasNet Database Schema
 
-This schema keeps per-branch pricing and prevents duplicate sales with
-idempotency keys. There is no separate customer table; the receipt name
-is stored directly on the sales transaction.
+This document describes the authoritative root `schema.sql` exported from PostgreSQL. The dump contains the six unique public tables below; although the dump repeats `sales_transactions`, it defines one logical table, not two.
 
-## Table 4: Branch
+Live row-level security policies may exist separately and are not part of the base schema.
 
-| Field Name | Data Type | Description |
+## `branches`
+
+| Column | Type | Constraints |
 | --- | --- | --- |
-| branch_id | INT (PK) | Unique identifier for each branch. |
-| branch_name | VARCHAR | Name of the specific branch. |
-| location | VARCHAR | Address of the branch. |
-| contact_no | VARCHAR | Official contact number of the branch. |
+| `branch_id` | `serial` | Primary key |
+| `branch_name` | `varchar(120)` | Not null, unique |
+| `location` | `varchar(255)` | Not null |
+| `contact_no` | `varchar(40)` | Not null |
 
-The Branch table defines the essential details of each business location,
-including its identifier, name, address, and contact information.
+There is no branch `active`, creation, or update column.
 
-```sql
-CREATE TABLE branches (
-  branch_id SERIAL PRIMARY KEY,
-  branch_name VARCHAR(120) NOT NULL UNIQUE,
-  location VARCHAR(255) NOT NULL,
-  contact_no VARCHAR(40) NOT NULL
-);
-```
+## `staff`
 
-## Table 5: Staff
-
-| Field Name | Data Type | Description |
+| Column | Type | Constraints |
 | --- | --- | --- |
-| staff_id | UUID (PK) | Unique identifier for the employee (matches auth.users.id). |
-| branch_id | INT (FK) | Links the staff to their assigned branch. |
-| username | VARCHAR | Account username for system login. |
-| password | VARCHAR | Encrypted account password. |
-| role | VARCHAR | User level (Admin, Staff, Manager). |
+| `staff_id` | `uuid` | Primary key |
+| `branch_id` | `integer` | Not null; references `branches` on delete restrict |
+| `username` | `varchar(80)` | Not null, unique |
+| `password` | `varchar(255)` | Nullable |
+| `role` | `varchar(20)` | Not null; `Admin`, `Staff`, or `Manager` |
 
-The Staff table outlines employee records, linking personnel to their assigned
-branch while storing login credentials and role classifications.
+There are no staff `email` or `active` columns. `staff_id` should correspond to a Supabase Auth user UUID. Auth users must be created through a trusted Supabase Admin API integration; PostgreSQL SQL cannot call `auth.admin` to create them.
 
-```sql
-CREATE TABLE staff (
-  staff_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE RESTRICT,
-  branch_id INT NOT NULL REFERENCES branches(branch_id) ON DELETE RESTRICT,
-  username VARCHAR(80) NOT NULL UNIQUE,
-  password VARCHAR(255) NOT NULL,
-  role VARCHAR(20) NOT NULL CHECK (role IN ('Admin', 'Staff', 'Manager'))
-);
-```
+## `products`
 
-## Table 6: Product
-
-| Field Name | Data Type | Description |
+| Column | Type | Constraints |
 | --- | --- | --- |
-| product_id | INT (PK) | Unique identifier for the product. |
-| product_name | VARCHAR | Name of the specific product. |
-| weight_kg | INT | Weight of the tank in kilograms. |
-| active | BOOLEAN | Indicates if the product is available for sale. |
+| `product_id` | `serial` | Primary key |
+| `product_name` | `varchar(120)` | Not null; not unique in the base schema |
+| `weight_kg` | `real` | Not null; greater than zero |
+| `active` | `boolean` | Not null; defaults to `true` |
 
-The Product table specifies the fundamental attributes of each item offered
-by the business. Prices are stored per branch in `branch_product_prices`.
+## `branch_product_prices`
 
-```sql
-CREATE TABLE products (
-  product_id SERIAL PRIMARY KEY,
-  product_name VARCHAR(120) NOT NULL UNIQUE,
-  weight_kg INT NOT NULL CHECK (weight_kg > 0),
-  active BOOLEAN NOT NULL DEFAULT true
-);
-```
-
-## Table 6A: Branch_Product_Prices (per-branch pricing)
-
-| Field Name | Data Type | Description |
+| Column | Type | Constraints |
 | --- | --- | --- |
-| branch_id | INT (PK, FK) | Branch that owns the price. |
-| product_id | INT (PK, FK) | Product being priced. |
-| price | INT | Current selling price for that branch. |
-| updated_at | TIMESTAMP | Last price update time. |
+| `branch_id` | `integer` | Composite primary key; references `branches` on delete restrict |
+| `product_id` | `integer` | Composite primary key; references `products` on delete restrict |
+| `price` | `integer` | Not null; greater than or equal to zero |
+| `updated_at` | `timestamptz` | Not null; defaults to `now()` |
 
-This table makes product pricing editable per branch and prevents duplicates
-by using a composite primary key.
+## `branch_stock`
 
-```sql
-CREATE TABLE branch_product_prices (
-  branch_id INT NOT NULL REFERENCES branches(branch_id) ON DELETE RESTRICT,
-  product_id INT NOT NULL REFERENCES products(product_id) ON DELETE RESTRICT,
-  price INT NOT NULL CHECK (price >= 0),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (branch_id, product_id)
-);
-```
-
-## Table 7: Branch_Stock
-
-| Field Name | Data Type | Description |
+| Column | Type | Constraints |
 | --- | --- | --- |
-| stock_id | INT (PK) | Unique identifier for the stock record. |
-| branch_id | INT (FK) | Links to the specific branch. |
-| product_id | INT (FK) | Links to the specific product. |
-| quantity | INT | Current number of units on hand. |
-| reorder_level | INT | Minimum quantity before a replenishment alert is sent. |
+| `stock_id` | `serial` | Primary key |
+| `branch_id` | `integer` | Not null; references `branches` on delete restrict; unique with `product_id` |
+| `product_id` | `integer` | Not null; references `products` on delete restrict |
+| `quantity` | `integer` | Not null; greater than or equal to zero |
+| `reorder_level` | `integer` | Not null; greater than or equal to zero |
 
-The Branch_Stock table records inventory details for each branch, linking
-products to their respective locations while tracking quantities and reorder levels.
+## `sales_transactions`
 
-```sql
-CREATE TABLE branch_stock (
-  stock_id SERIAL PRIMARY KEY,
-  branch_id INT NOT NULL REFERENCES branches(branch_id) ON DELETE RESTRICT,
-  product_id INT NOT NULL REFERENCES products(product_id) ON DELETE RESTRICT,
-  quantity INT NOT NULL CHECK (quantity >= 0),
-  reorder_level INT NOT NULL CHECK (reorder_level >= 0),
-  UNIQUE (branch_id, product_id)
-);
-```
-
-## Table 8: Sales_Transaction (idempotent)
-
-| Field Name | Data Type | Description |
+| Column | Type | Constraints |
 | --- | --- | --- |
-| sales_id | INT (PK) | Unique identifier for the sale. |
-| idempotency_key | VARCHAR | Client-generated key to prevent duplicate sales. |
-| tracking_no | VARCHAR | Unique tracking number for the customer. |
-| guest_name | VARCHAR | Name of the customer (receipt only). |
-| guest_phone | VARCHAR | Customer contact number (optional). |
-| delivery_address | VARCHAR | Destination address (optional). |
-| transaction_date | DATE | The date the sale was made. |
-| branch_id | INT (FK) | The branch where the sale occurred. |
-| staff_id | UUID (FK) | The staff member who processed the sale. |
-| transaction_type | VARCHAR | Type of transaction (Instore, Commercial). |
-| subtotal | INT | Subtotal before adjustments. |
-| total | INT | Final total for the sale. |
+| `sales_id` | `serial` | Primary key |
+| `idempotency_key` | `varchar(80)` | Not null; unique with `branch_id` |
+| `tracking_no` | `varchar(80)` | Nullable, unique |
+| `guest_name` | `varchar(120)` | Not null |
+| `guest_phone` | `varchar(40)` | Nullable |
+| `delivery_address` | `varchar(255)` | Nullable |
+| `transaction_date` | `date` | Not null; defaults to `CURRENT_DATE` |
+| `branch_id` | `integer` | Not null; references `branches` on delete restrict |
+| `staff_id` | `uuid` | Not null (the base dump does not declare a foreign key) |
+| `transaction_type` | `varchar(20)` | Not null; `Instore` or `Commercial` |
+| `subtotal` | `integer` | Not null; greater than or equal to zero |
+| `total` | `integer` | Not null; greater than or equal to zero |
 
-The Sales_Transaction table documents customer purchases, capturing transaction
-details, delivery information, and the staff and branch involved in the sale.
-Idempotency is enforced per branch to avoid duplicate inserts on retries.
+The base schema has no `transaction_items` table. The duplicate `sales_transactions` DDL and index statements in the root export represent the same single table.
 
-```sql
-CREATE TABLE sales_transactions (
-  sales_id SERIAL PRIMARY KEY,
-  idempotency_key VARCHAR(80) NOT NULL,
-  tracking_no VARCHAR(80),
-  guest_name VARCHAR(120) NOT NULL,
-  guest_phone VARCHAR(40),
-  delivery_address VARCHAR(255),
-  transaction_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  branch_id INT NOT NULL REFERENCES branches(branch_id) ON DELETE RESTRICT,
-  staff_id UUID NOT NULL REFERENCES staff(staff_id) ON DELETE RESTRICT,
-  transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('Instore', 'Commercial')),
-  subtotal INT NOT NULL CHECK (subtotal >= 0),
-  total INT NOT NULL CHECK (total >= 0),
-  UNIQUE (branch_id, idempotency_key),
-  UNIQUE (tracking_no)
-);
-```
+## `deliveries`
 
-### Idempotent insert example
-```sql
-INSERT INTO sales_transactions (
-  idempotency_key, tracking_no, guest_name, guest_phone, delivery_address,
-  branch_id, staff_id, transaction_type, subtotal, total
-) VALUES (
-  $1, $2, $3, $4, $5,
-  $6, $7, $8, $9, $10
-)
-ON CONFLICT (branch_id, idempotency_key)
-DO NOTHING;
-
-SELECT sales_id
-FROM sales_transactions
-WHERE branch_id = $6
-  AND idempotency_key = $1;
-```
-
-## Table 9: Delivery
-
-| Field Name | Data Type | Description |
+| Column | Type | Constraints |
 | --- | --- | --- |
-| delivery_id | INT (PK) | Unique identifier for the delivery task. |
-| sales_id | INT (FK) | Links back to the original sales transaction. |
-| status | VARCHAR | Status of the delivery. |
-| updated_at | TIMESTAMP | Last status update time. |
+| `delivery_id` | `serial` | Primary key |
+| `sales_id` | `integer` | Not null; references `sales_transactions` on delete cascade |
+| `status` | `varchar(30)` | Not null; `Pending`, `Out for Delivery`, `Delivered`, or `Cancelled` |
+| `updated_at` | `timestamptz` | Not null; defaults to `now()` |
 
-```sql
-CREATE TABLE deliveries (
-  delivery_id SERIAL PRIMARY KEY,
-  sales_id INT NOT NULL REFERENCES sales_transactions(sales_id) ON DELETE CASCADE,
-  status VARCHAR(30) NOT NULL CHECK (status IN ('Pending', 'Out for Delivery', 'Delivered', 'Cancelled')),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-```
+## Functions and RPCs
 
-## Optional seed data (branches)
-```sql
-INSERT INTO branches (branch_name, location, contact_no) VALUES
-  ('Bayan', 'Bayan Address', '000-000-0000'),
-  ('Gulod', 'Gulod Address', '000-000-0000'),
-  ('Cuenca', 'Cuenca Address', '000-000-0000'),
-  ('Caloocan', 'Caloocan Address', '000-000-0000'),
-  ('Agoncillo', 'Agoncillo Address', '000-000-0000'),
-  ('Sta. Teresita', 'Sta. Teresita Address', '000-000-0000');
-```
+The authoritative base schema defines no stored functions or RPCs. Any live RLS policies or separately deployed integrations are outside this base-schema dump.

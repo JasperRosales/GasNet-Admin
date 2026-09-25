@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Eye, EyeOff } from "lucide-react";
-import { supabase } from "../utils/supabase";
 import { useAuth } from "../utils/auth";
 
 export function LoginPage() {
@@ -11,8 +10,7 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { session, loading, error: authError } = useAuth();
-  const LOGIN_TIMEOUT_MS = 10000;
+  const { session, loading, error: authError, signIn } = useAuth();
 
   useEffect(() => {
     if (loading) return;
@@ -33,29 +31,7 @@ export function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const timeout = new Promise<"timeout">((resolve) => {
-        setTimeout(() => resolve("timeout"), LOGIN_TIMEOUT_MS);
-      });
-
-      const result = await Promise.race([
-        supabase.auth
-          .signInWithPassword({
-            email,
-            password,
-          })
-          .then((response) => ({ type: "response" as const, response })),
-        timeout,
-      ]);
-
-      if (result === "timeout") {
-        setError("Login timed out. Please check your connection and try again.");
-        return;
-      }
-
-      const { error: authError } = result.response;
-      if (authError) {
-        setError(authError.message);
-      }
+      await signIn(email.trim(), password);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to sign in.";
       setError(message);
@@ -82,18 +58,18 @@ export function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-[#FFFDF1] mb-2">
-                Email
+                Email address
               </label>
               <input
                 id="email"
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-[#1B211A]/30 border border-[#FFFDF1]/20 text-[#FFFDF1] placeholder-[#EBD5AB]/50 focus:outline-none focus:ring-2 focus:ring-[#FFFDF1]/50 focus:border-transparent transition"
                 style={{
                   boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.3)',
                 }}
-                placeholder="Enter your email"
+                placeholder="Enter your admin email"
                 required
               />
             </div>

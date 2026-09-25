@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Users, Package, DollarSign, Activity } from "lucide-react";
-import { unwrapRelation } from "../utils/relations";
-import { supabase } from "../utils/supabase";
+import { appService, type DashboardBranch } from "../services/appService";
 
 interface BranchOverview {
   name: string;
@@ -11,14 +10,14 @@ interface BranchOverview {
 }
 
 const formatCurrency = (value: number) =>
-  `₱${value.toLocaleString("en-PH")}`;
+  `â‚±${value.toLocaleString("en-PH")}`;
 
 export function HomePage() {
   const [stats, setStats] = useState([
-    { icon: DollarSign, label: "Total Revenue", value: "—", change: "Live", positive: true },
-    { icon: Package, label: "LPG Cylinders", value: "—", change: "Live", positive: true },
-    { icon: Users, label: "Top Perfoming Branch", value: "—", change: "Live", positive: true },
-    { icon: Activity, label: "Total Target Reached", value: "—", change: "Live", positive: true },
+    { icon: DollarSign, label: "Total Revenue", value: "â€”", change: "Live", positive: true },
+    { icon: Package, label: "LPG Cylinders", value: "â€”", change: "Live", positive: true },
+    { icon: Users, label: "Top Perfoming Branch", value: "â€”", change: "Live", positive: true },
+    { icon: Activity, label: "Total Target Reached", value: "â€”", change: "Live", positive: true },
   ]);
   const [branchOverview, setBranchOverview] = useState<BranchOverview[]>([]);
   const [dashboardError, setDashboardError] = useState("");
@@ -28,73 +27,50 @@ export function HomePage() {
 
     const loadDashboard = async () => {
       setDashboardError("");
-      const [salesResponse, stockResponse] = await Promise.all([
-        supabase
-          .from("sales_transactions")
-          .select("total, branch:branches(branch_id, branch_name)"),
-        supabase
-          .from("branch_stock")
-          .select(
-            "quantity, reorder_level, branch:branches(branch_id, branch_name)",
-          ),
-      ]);
+      try {
+        const dashboard = await appService.dashboard.get();
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      if (salesResponse.error || stockResponse.error) {
-        setDashboardError(
-          salesResponse.error?.message ??
-            stockResponse.error?.message ??
-            "Unable to load dashboard data.",
+        const totalRevenue =
+          typeof dashboard.totalRevenue === "number"
+            ? dashboard.totalRevenue
+            : Number(dashboard.metrics?.revenue ?? 0);
+        const totalCylinders =
+          typeof dashboard.totalCylinders === "number"
+            ? dashboard.totalCylinders
+            : Number(dashboard.metrics?.cylindersInStock ?? 0);
+        const topBranch =
+          dashboard.topBranch ??
+          dashboard.topPerformingBranch ??
+          dashboard.branchPerformance?.[0]?.branchName ??
+          dashboard.branchPerformance?.[0]?.name;
+        const targetReachedPercent = Number(
+          dashboard.targetReachedPercent ??
+            (dashboard.metrics?.lowStockRecords === undefined
+              ? 0
+              : 100),
         );
-      }
 
-      const salesData = salesResponse.data ?? [];
-      const stockData = stockResponse.data ?? [];
+        const branchSource =
+          dashboard.branchOverview ??
+          dashboard.branches ??
+          dashboard.branchPerformance ??
+          [];
+        const branchCards: BranchOverview[] = branchSource
+          .map((branch: DashboardBranch) => {
+            const name = String(branch.name ?? branch.branchName ?? "Unknown");
+            const total = Number(branch.totalCylinders ?? branch.quantity ?? 0);
+            return {
+              name,
+              totalCylinders: total,
+              targetGoal: Number(branch.targetGoal ?? total),
+              status: String(branch.status ?? (total > 0 ? "Reached" : "Pending")),
+            };
+          })
+          .sort((a, b) => a.name.localeCompare(b.name));
 
-      const totalRevenue = salesData.reduce(
-        (sum, row) => sum + (row.total ?? 0),
-        0,
-      );
-      const totalCylinders = stockData.reduce(
-        (sum, row) => sum + (row.quantity ?? 0),
-        0,
-      );
-
-      const branchSales = new Map<string, number>();
-      salesData.forEach((row) => {
-        const branch = unwrapRelation(row.branch);
-        const name = branch?.branch_name ?? "Unknown";
-        branchSales.set(name, (branchSales.get(name) ?? 0) + (row.total ?? 0));
-      });
-      const topBranch = Array.from(branchSales.entries()).sort(
-        (a, b) => b[1] - a[1],
-      )[0]?.[0];
-
-      const totalTargets = stockData.length;
-      const targetsReached = stockData.filter(
-        (row) => (row.quantity ?? 0) >= (row.reorder_level ?? 0),
-      ).length;
-      const targetReachedPercent = totalTargets
-        ? Math.round((targetsReached / totalTargets) * 100)
-        : 0;
-
-      const branchTotals = new Map<string, number>();
-      stockData.forEach((row) => {
-        const branch = unwrapRelation(row.branch);
-        const name = branch?.branch_name ?? "Unknown";
-        branchTotals.set(name, (branchTotals.get(name) ?? 0) + (row.quantity ?? 0));
-      });
-      const branchCards = Array.from(branchTotals.entries())
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([name, total]) => ({
-          name,
-          totalCylinders: total,
-          targetGoal: total,
-          status: total > 0 ? "Reached" : "Pending",
-        }));
-
-      setStats([
+        setStats([
         {
           icon: DollarSign,
           label: "Total Revenue",
@@ -112,7 +88,7 @@ export function HomePage() {
         {
           icon: Users,
           label: "Top Perfoming Branch",
-          value: topBranch ?? "—",
+          value: topBranch ?? "â€”",
           change: "Live",
           positive: true,
         },
@@ -124,7 +100,13 @@ export function HomePage() {
           positive: true,
         },
       ]);
-      setBranchOverview(branchCards);
+        setBranchOverview(branchCards);
+      } catch (error) {
+        if (!isMounted) return;
+        setDashboardError(
+          error instanceof Error ? error.message : "Unable to load dashboard data.",
+        );
+      }
     };
 
     loadDashboard();

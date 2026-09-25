@@ -5,15 +5,15 @@ interface StaffManagementProps {
   staff: StaffSetting[];
   loading: boolean;
   error: string;
-  onAdd: () => void;
-  onEdit: (staff: StaffSetting) => void;
+  onCreate?: () => void;
+  onEdit?: (staff: StaffSetting) => void;
 }
 
 export function StaffManagement({
   staff,
   loading,
   error,
-  onAdd,
+  onCreate,
   onEdit,
 }: StaffManagementProps) {
   return (
@@ -42,17 +42,19 @@ export function StaffManagement({
             </p>
           </div>
         </div>
-        <button
-          onClick={onAdd}
-          className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1] text-sm flex items-center gap-2"
-          style={{
-            boxShadow:
-              "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-          }}
-        >
-          <Plus className="w-4 h-4" />
-          Add Staff
-        </button>
+        {onCreate && (
+          <button
+            onClick={onCreate}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1] text-sm flex items-center gap-2"
+            style={{
+              boxShadow:
+                "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
+            }}
+          >
+            <Plus className="w-4 h-4" />
+            Create Staff
+          </button>
+        )}
       </div>
 
       {error && (
@@ -86,16 +88,18 @@ export function StaffManagement({
                   ID: {member.id.slice(0, 8)}...
                 </p>
               </div>
-              <button
-                onClick={() => onEdit(member)}
-                className="mt-3 w-full px-4 py-2 rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1] text-sm"
-                style={{
-                  boxShadow:
-                    "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
-                }}
-              >
-                Manage Staff
-              </button>
+              {onEdit && (
+                <button
+                  onClick={() => onEdit(member)}
+                  className="mt-3 w-full px-4 py-2 rounded-xl bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1] text-sm"
+                  style={{
+                    boxShadow:
+                      "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
+                  }}
+                >
+                  Manage Staff
+                </button>
+              )}
             </div>
           ))}
           {!staff.length && (

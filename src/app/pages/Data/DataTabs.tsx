@@ -1,4 +1,4 @@
-type DataTab = "inventory" | "transactions";
+type DataTab = "inventory" | "transactions" | "catalog";
 
 interface DataTabsProps {
   activeTab: DataTab;
@@ -33,7 +33,14 @@ export function DataTabs({ activeTab, onChange }: DataTabsProps) {
         Inventory Data
       </button>
       <button
-        onClick={() => onChange("transactions")}
+        onClick={() => onChange("catalog")}
+         className={`px-6 py-3 rounded-2xl transition-all ${activeTab === "catalog" ? "bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1]" : "text-[#628141]"}`}
+         style={activeTab === "catalog" ? { boxShadow: "0 4px 16px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)" } : {}}
+       >
+         Product Catalog
+       </button>
+       <button
+         onClick={() => onChange("transactions")}
         className={`px-6 py-3 rounded-2xl transition-all ${
           activeTab === "transactions"
             ? "bg-gradient-to-r from-[#628141] to-[#8BAE66] text-[#FFFDF1]"

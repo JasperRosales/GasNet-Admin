@@ -43,12 +43,12 @@ export function StaffModal({
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h3 className="text-[#1B211A]">
-              {isEditing ? "Edit Staff" : "Add Staff"}
+              {isEditing ? "Edit Staff" : "Create Staff"}
             </h3>
             <p className="text-sm text-[#628141]">
               {isEditing
-                ? "Update staff role and branch assignment."
-                : "Create a staff profile for a new team member."}
+                ? "Update the account email, role, and branch assignment."
+                : "Create a Supabase Auth account and staff profile."}
             </p>
           </div>
           <button
@@ -62,24 +62,31 @@ export function StaffModal({
 
         <form className="space-y-4" onSubmit={onSubmit}>
           <div>
-            <label className="mb-2 block text-sm text-[#628141]">
-              Username
+            <label htmlFor="staff-email" className="mb-2 block text-sm text-[#628141]">
+              Account email
             </label>
             <input
-              type="text"
-              value={staffForm.username}
-              onChange={(event) => onFieldChange("username", event.target.value)}
+              id="staff-email"
+              type="email"
+              value={staffForm.email}
+              onChange={(event) => onFieldChange("email", event.target.value)}
               className="w-full rounded-2xl bg-[#EBD5AB]/20 px-4 py-3 text-[#1B211A] outline-none"
               style={{
                 boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
               }}
+              placeholder="Enter the account email"
+              autoComplete="email"
+              maxLength={254}
               required
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm text-[#628141]">Password</label>
+            <label htmlFor="staff-password" className="mb-2 block text-sm text-[#628141]">
+              Password
+            </label>
             <input
+              id="staff-password"
               type="password"
               value={staffForm.password}
               onChange={(event) => onFieldChange("password", event.target.value)}
@@ -87,7 +94,9 @@ export function StaffModal({
               style={{
                 boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
               }}
-              placeholder={isEditing ? "Leave blank to keep current" : ""}
+              placeholder={isEditing ? "Leave blank to keep current" : "Enter an initial password"}
+              autoComplete="new-password"
+              minLength={8}
               required={!isEditing}
             />
           </div>
@@ -117,6 +126,7 @@ export function StaffModal({
               <select
                 value={staffForm.branchId}
                 onChange={(event) => onFieldChange("branchId", event.target.value)}
+                required
                 className="w-full appearance-none rounded-2xl bg-[#EBD5AB]/20 px-4 py-3 pr-10 text-[#1B211A] outline-none"
                 style={{
                   boxShadow: "inset 0 2px 6px rgba(98, 129, 65, 0.1)",
@@ -176,7 +186,13 @@ export function StaffModal({
                     "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
                 }}
               >
-                {isSaving ? "Saving..." : isEditing ? "Save Changes" : "Add Staff"}
+                {isSaving
+                  ? isEditing
+                    ? "Saving..."
+                    : "Creating..."
+                  : isEditing
+                    ? "Save Changes"
+                    : "Create Staff"}
               </button>
             </div>
           </div>

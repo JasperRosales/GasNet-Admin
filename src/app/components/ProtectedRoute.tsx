@@ -6,7 +6,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { session, loading, error } = useAuth();
+  const { session, user, loading, error } = useAuth();
 
   if (loading) {
     return null;
@@ -20,7 +20,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  if (!session) {
+  if (!session || !user || user.role !== "Admin") {
     return <Navigate to="/" replace />;
   }
 

@@ -25,6 +25,7 @@ export interface BranchForm {
 
 export interface StaffForm {
   username: string;
+  email: string;
   password: string;
   role: StaffRole;
   branchId: string;

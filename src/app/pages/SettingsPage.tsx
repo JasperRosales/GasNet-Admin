@@ -1,6 +1,7 @@
 import { Database } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
-import bcrypt from "bcryptjs";
+import { appService, type BranchDTO, type StaffDTO } from "../services/appService";
+import { useAuth } from "../utils/auth";
 import { BranchManagement } from "./Settings/BranchManagement";
 import { BranchModal } from "./Settings/BranchModal";
 import { DeleteConfirmModal } from "./Settings/DeleteConfirmModal";
@@ -8,17 +9,15 @@ import { SettingsHeader } from "./Settings/SettingsHeader";
 import { SettingsSectionList } from "./Settings/SettingsSectionList";
 import { StaffManagement } from "./Settings/StaffManagement";
 import { StaffModal } from "./Settings/StaffModal";
+import { registerStaff } from "./Settings/staffService";
 import type {
   BranchForm,
   BranchSetting,
   DeleteTarget,
   SettingSection,
   StaffForm,
-  StaffRole,
   StaffSetting,
 } from "./Settings/types";
-import { unwrapRelation } from "../utils/relations";
-import { supabase } from "../utils/supabase";
 
 const EMPTY_BRANCH_FORM: BranchForm = {
   name: "",
@@ -28,31 +27,10 @@ const EMPTY_BRANCH_FORM: BranchForm = {
 
 const EMPTY_STAFF_FORM: StaffForm = {
   username: "",
+  email: "",
   password: "",
   role: "Staff",
   branchId: "",
-};
-
-const generateStaffId = () => {
-  const cryptoObject = globalThis.crypto;
-  if (!cryptoObject) {
-    throw new Error("Secure UUID generation is not available in this browser.");
-  }
-  if (cryptoObject.randomUUID) {
-    return cryptoObject.randomUUID();
-  }
-  const bytes = new Uint8Array(16);
-  cryptoObject.getRandomValues(bytes);
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const toHex = (value: number) => value.toString(16).padStart(2, "0");
-  return (
-    `${toHex(bytes[0])}${toHex(bytes[1])}${toHex(bytes[2])}${toHex(bytes[3])}` +
-    `-${toHex(bytes[4])}${toHex(bytes[5])}` +
-    `-${toHex(bytes[6])}${toHex(bytes[7])}` +
-    `-${toHex(bytes[8])}${toHex(bytes[9])}` +
-    `-${toHex(bytes[10])}${toHex(bytes[11])}${toHex(bytes[12])}${toHex(bytes[13])}${toHex(bytes[14])}${toHex(bytes[15])}`
-  );
 };
 
 export function SettingsPage() {
@@ -74,33 +52,33 @@ export function SettingsPage() {
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
   const [staffForm, setStaffForm] = useState<StaffForm>(EMPTY_STAFF_FORM);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const { user } = useAuth();
+  const canManageStaff = user?.role === "Admin";
 
   useEffect(() => {
     const loadBranches = async () => {
       setBranchLoading(true);
       setBranchError("");
-      const { data, error } = await supabase
-        .from("branches")
-        .select("branch_id, branch_name, location, contact_no")
-        .order("branch_name");
-
-      if (error) {
-        setBranchError(error.message);
-        setBranchSettings([]);
-        setBranchLoading(false);
-        return;
-      }
-
-      const mapped =
-        data?.map((branch) => ({
-          id: branch.branch_id,
-          name: branch.branch_name,
+      try {
+        const data = await appService.branches.list();
+        const mapped = data.map((branch: BranchDTO) => ({
+          id: branch.id,
+          name: branch.name,
           location: branch.location,
-          contactNo: branch.contact_no,
-        })) ?? [];
+          contactNo: branch.contactNo,
+        }));
 
-      setBranchSettings(mapped);
-      setBranchLoading(false);
+        setBranchSettings(mapped);
+      } catch (loadError) {
+        setBranchError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load branches.",
+        );
+        setBranchSettings([]);
+      } finally {
+        setBranchLoading(false);
+      }
     };
 
     loadBranches();
@@ -110,34 +88,25 @@ export function SettingsPage() {
     const loadStaff = async () => {
       setStaffLoading(true);
       setStaffError("");
-      const { data, error } = await supabase
-        .from("staff")
-        .select(
-          "staff_id, username, role, branch_id, branch:branches(branch_name)",
-        )
-        .order("username");
+      try {
+        const data = await appService.staff.list();
+        const mapped = data.map((staff: StaffDTO) => ({
+          id: staff.id,
+          username: staff.username,
+          role: staff.role,
+          branchId: staff.branchId,
+          branchName: staff.branchName || "Unknown",
+        }));
 
-      if (error) {
-        setStaffError(error.message);
+        setStaffSettings(mapped);
+      } catch (loadError) {
+        setStaffError(
+          loadError instanceof Error ? loadError.message : "Unable to load staff.",
+        );
         setStaffSettings([]);
+      } finally {
         setStaffLoading(false);
-        return;
       }
-
-      const mapped =
-        data?.map((staff) => {
-          const branch = unwrapRelation(staff.branch);
-          return {
-            id: staff.staff_id,
-            username: staff.username,
-            role: staff.role as StaffRole,
-            branchId: staff.branch_id,
-            branchName: branch?.branch_name ?? "Unknown",
-          };
-        }) ?? [];
-
-      setStaffSettings(mapped);
-      setStaffLoading(false);
     };
 
     loadStaff();
@@ -185,7 +154,7 @@ export function SettingsPage() {
     setStaffForm(EMPTY_STAFF_FORM);
   };
 
-  const openAddStaffModal = () => {
+  const openCreateStaffModal = () => {
     setStaffForm({
       ...EMPTY_STAFF_FORM,
       branchId: branchSettings[0] ? String(branchSettings[0].id) : "",
@@ -197,6 +166,7 @@ export function SettingsPage() {
   const openEditStaffModal = (staff: StaffSetting) => {
     setStaffForm({
       username: staff.username,
+      email: "",
       password: "",
       role: staff.role,
       branchId: String(staff.branchId),
@@ -244,66 +214,38 @@ export function SettingsPage() {
     setIsSaving(true);
     setBranchError("");
 
-    if (editingBranchId !== null) {
-      const { data, error } = await supabase
-        .from("branches")
-        .update({
-          branch_name: branchForm.name,
-          location: branchForm.location,
-          contact_no: branchForm.contactNo,
-        })
-        .eq("branch_id", editingBranchId)
-        .select("branch_id, branch_name, location, contact_no")
-        .single();
+    try {
+      const branch = editingBranchId === null
+        ? await appService.branches.create({
+            name: branchForm.name,
+            location: branchForm.location,
+            contactNo: branchForm.contactNo,
+          })
+        : await appService.branches.update(editingBranchId, {
+            name: branchForm.name,
+            location: branchForm.location,
+            contactNo: branchForm.contactNo,
+          });
 
-      if (error) {
-        setBranchError(error.message);
-        setIsSaving(false);
-        return;
-      }
-
+      const mapped = {
+        id: branch.id,
+        name: branch.name,
+        location: branch.location,
+        contactNo: branch.contactNo,
+      };
       setBranchSettings((prev) =>
-        prev.map((branch) =>
-          branch.id === editingBranchId
-            ? {
-                id: data.branch_id,
-                name: data.branch_name,
-                location: data.location,
-                contactNo: data.contact_no,
-              }
-            : branch,
-        ),
+        editingBranchId === null
+          ? [...prev, mapped]
+          : prev.map((item) => (item.id === editingBranchId ? mapped : item)),
       );
-    } else {
-      const { data, error } = await supabase
-        .from("branches")
-        .insert({
-          branch_name: branchForm.name,
-          location: branchForm.location,
-          contact_no: branchForm.contactNo,
-        })
-        .select("branch_id, branch_name, location, contact_no")
-        .single();
-
-      if (error) {
-        setBranchError(error.message);
-        setIsSaving(false);
-        return;
-      }
-
-      setBranchSettings((prev) => [
-        ...prev,
-        {
-          id: data.branch_id,
-          name: data.branch_name,
-          location: data.location,
-          contactNo: data.contact_no,
-        },
-      ]);
+      setIsSaving(false);
+      closeBranchModal();
+    } catch (error) {
+      setBranchError(
+        error instanceof Error ? error.message : "Unable to save the branch.",
+      );
+      setIsSaving(false);
     }
-
-    setIsSaving(false);
-    closeBranchModal();
   };
 
   const handleStaffSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -311,109 +253,74 @@ export function SettingsPage() {
     setIsStaffSaving(true);
     setStaffError("");
 
+    const emailValue = staffForm.email.trim();
+    const passwordValue = staffForm.password.trim();
+
+    if (!emailValue) {
+      setStaffError("Email is required for staff.");
+      setIsStaffSaving(false);
+      return;
+    }
+
     if (!staffForm.branchId) {
       setStaffError("Select a branch before saving staff.");
       setIsStaffSaving(false);
       return;
     }
 
-    if (!editingStaffId && !staffForm.password.trim()) {
+    if (!editingStaffId && !passwordValue) {
       setStaffError("Password is required for new staff.");
       setIsStaffSaving(false);
       return;
     }
 
-    const passwordValue = staffForm.password.trim();
-    const hashedPassword = passwordValue
-      ? await bcrypt.hash(passwordValue, 10)
-      : null;
-
     if (editingStaffId !== null) {
-      const updates: {
-        branch_id: number;
-        username: string;
-        role: StaffRole;
-        password?: string;
-      } = {
-        branch_id: Number(staffForm.branchId),
-        username: staffForm.username,
-        role: staffForm.role,
-      };
-
-      if (hashedPassword) {
-        updates.password = hashedPassword;
-      }
-
-      const { data, error } = await supabase
-        .from("staff")
-        .update(updates)
-        .eq("staff_id", editingStaffId)
-        .select(
-          "staff_id, username, role, branch_id, branch:branches(branch_name)",
-        )
-        .single();
-
-      if (error) {
-        setStaffError(error.message);
-        setIsStaffSaving(false);
-        return;
-      }
-
-      setStaffSettings((prev) =>
-        prev.map((staff) =>
-          staff.id === editingStaffId
-            ? {
-                id: data.staff_id,
-                username: data.username,
-                role: data.role as StaffRole,
-                branchId: data.branch_id,
-                branchName: unwrapRelation(data.branch)?.branch_name ?? "Unknown",
-              }
-            : staff,
-        ),
-      );
-    } else {
-      let staffId: string;
       try {
-        staffId = generateStaffId();
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Unable to generate staff ID.";
-        setStaffError(message);
-        setIsStaffSaving(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("staff")
-        .insert({
-          staff_id: staffId,
-          branch_id: Number(staffForm.branchId),
-          username: staffForm.username,
+        const updatedStaff = await appService.staff.update(editingStaffId, {
+          username: usernameValue,
           role: staffForm.role,
-          password: hashedPassword ?? "",
-        })
-        .select(
-          "staff_id, username, role, branch_id, branch:branches(branch_name)",
-        )
-        .single();
-
-      if (error) {
-        setStaffError(error.message);
+          branchId: Number(staffForm.branchId),
+          ...(passwordValue ? { password: passwordValue } : {}),
+        });
+        setStaffSettings((prev) =>
+          prev.map((staff) =>
+            staff.id === editingStaffId
+              ? {
+                  id: updatedStaff.id,
+                  username: updatedStaff.username,
+                  role: updatedStaff.role,
+                  branchId: updatedStaff.branchId,
+                  branchName: updatedStaff.branchName || "Unknown",
+                }
+              : staff,
+          ),
+        );
+      } catch (error) {
+        setStaffError(
+          error instanceof Error ? error.message : "Unable to update the staff account.",
+        );
         setIsStaffSaving(false);
         return;
       }
+    } else {
+      try {
+        const createdStaff = await registerStaff({
+          email: emailValue,
+          password: passwordValue,
+          role: staffForm.role,
+          branchId: Number(staffForm.branchId),
+        });
 
-      setStaffSettings((prev) => [
-        ...prev,
-        {
-          id: data.staff_id,
-          username: data.username,
-          role: data.role as StaffRole,
-          branchId: data.branch_id,
-          branchName: unwrapRelation(data.branch)?.branch_name ?? "Unknown",
-        },
-      ]);
+        setStaffSettings((prev) => [...prev, createdStaff]);
+      } catch (error) {
+        setStaffError(
+          error instanceof Error
+            ? error.message
+            : "Unable to create the staff account.",
+        );
+        setIsStaffSaving(false);
+        return;
+      }
     }
 
     setIsStaffSaving(false);
@@ -423,45 +330,37 @@ export function SettingsPage() {
   const handleDeleteBranch = async (branchId: number) => {
     setIsDeleting(true);
     setBranchError("");
-    const { error } = await supabase
-      .from("branches")
-      .delete()
-      .eq("branch_id", branchId);
-
-    if (error) {
-      setBranchError(error.message);
+    try {
+      await appService.branches.delete(branchId);
+      setBranchSettings((prev) => prev.filter((branch) => branch.id !== branchId));
+      setIsDeleting(false);
+      closeBranchModal();
+      return true;
+    } catch (error) {
+      setBranchError(
+        error instanceof Error ? error.message : "Unable to delete the branch.",
+      );
       setIsDeleting(false);
       return false;
     }
-
-    setBranchSettings((prev) =>
-      prev.filter((branch) => branch.id !== branchId),
-    );
-    setIsDeleting(false);
-    closeBranchModal();
-    return true;
   };
 
   const handleDeleteStaff = async (staffId: string) => {
     setIsStaffDeleting(true);
     setStaffError("");
-    const { error } = await supabase
-      .from("staff")
-      .delete()
-      .eq("staff_id", staffId);
-
-    if (error) {
-      setStaffError(error.message);
+    try {
+      await appService.staff.delete(staffId);
+      setStaffSettings((prev) => prev.filter((staff) => staff.id !== staffId));
+      setIsStaffDeleting(false);
+      closeStaffModal();
+      return true;
+    } catch (error) {
+      setStaffError(
+        error instanceof Error ? error.message : "Unable to delete the staff account.",
+      );
       setIsStaffDeleting(false);
       return false;
     }
-
-    setStaffSettings((prev) =>
-      prev.filter((staff) => staff.id !== staffId),
-    );
-    setIsStaffDeleting(false);
-    closeStaffModal();
-    return true;
   };
 
   const handleConfirmDelete = async () => {
@@ -501,8 +400,8 @@ export function SettingsPage() {
         staff={staffSettings}
         loading={staffLoading}
         error={staffError}
-        onAdd={openAddStaffModal}
-        onEdit={openEditStaffModal}
+        onCreate={canManageStaff ? openCreateStaffModal : undefined}
+        onEdit={canManageStaff ? openEditStaffModal : undefined}
       />
       <BranchModal
         open={isBranchModalOpen}
