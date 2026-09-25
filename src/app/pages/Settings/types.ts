@@ -7,6 +7,10 @@ export interface BranchSetting {
   name: string;
   location: string;
   contactNo: string;
+  targetRevenue: number;
+  periodStart: string;
+  periodEnd: string;
+  targetId: number | null;
 }
 
 export interface StaffSetting {

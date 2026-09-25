@@ -7,6 +7,7 @@ interface BranchManagementProps {
   error: string;
   onAdd: () => void;
   onEdit: (branch: BranchSetting) => void;
+  onTarget: (branch: BranchSetting) => void;
 }
 
 export function BranchManagement({
@@ -15,6 +16,7 @@ export function BranchManagement({
   error,
   onAdd,
   onEdit,
+  onTarget,
 }: BranchManagementProps) {
   return (
     <div
@@ -94,6 +96,10 @@ export function BranchManagement({
               >
                 Manage Branch
               </button>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="text-xs text-[#628141]">Current month: {branch.targetRevenue > 0 ? `₱${branch.targetRevenue.toLocaleString("en-PH")}` : "Not set"}</p>
+                <button onClick={() => onTarget(branch)} className="rounded-lg border border-[#628141]/30 px-3 py-1 text-xs text-[#628141]">Set Target</button>
+              </div>
             </div>
           ))}
           {!branches.length && (

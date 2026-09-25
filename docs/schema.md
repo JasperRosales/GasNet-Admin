@@ -83,6 +83,21 @@ The base schema has no `transaction_items` table. The duplicate `sales_transacti
 | `status` | `varchar(30)` | Not null; `Pending`, `Out for Delivery`, `Delivered`, or `Cancelled` |
 | `updated_at` | `timestamptz` | Not null; defaults to `now()` |
 
+## `revenue_targets`
+
+Monthly branch sales targets use a date range so the stored period remains explicit.
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `target_id` | `bigint identity` | Primary key |
+| `branch_id` | `integer` | Not null; references `branches` on delete cascade; unique with the period columns |
+| `period_start` | `date` | Not null; first day of a calendar month |
+| `period_end` | `date` | Not null; last day of the same calendar month and not before `period_start` |
+| `target_revenue` | `integer` | Not null; greater than zero |
+| `created_at` | `timestamptz` | Not null; defaults to `now()` |
+
+The table has a unique constraint on `(branch_id, period_start, period_end)`, RLS is enabled, and authenticated users may select, insert, update, and delete targets. Dashboard target percentages compare current-month `sales_transactions.total` with the branch target for that month.
+
 ## Functions and RPCs
 
 The authoritative base schema defines no stored functions or RPCs. Any live RLS policies or separately deployed integrations are outside this base-schema dump.

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { TransactionRecord } from "./types";
 
 interface TransactionsTableProps {
@@ -15,9 +16,14 @@ export function TransactionsTable({
   formatAmount,
   formatDisplayDate,
 }: TransactionsTableProps) {
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(transactions.length / pageSize));
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  const visibleTransactions = transactions.slice((page - 1) * pageSize, page * pageSize);
   return (
     <div
-      className="rounded-3xl bg-[#FFFDF1] overflow-hidden"
+      className="rounded-3xl bg-[#FFFDF1] overflow-hidden page-fade-in"
       style={{
         boxShadow:
           "0 8px 32px rgba(98, 129, 65, 0.15), inset 0 2px 8px rgba(255, 255, 255, 0.6), inset 0 -2px 8px rgba(98, 129, 65, 0.05)",
@@ -33,7 +39,6 @@ export function TransactionsTable({
               </th>
               <th className="px-6 py-4 text-left text-[#FFFDF1]">Customer</th>
               <th className="px-6 py-4 text-left text-[#FFFDF1]">Branch</th>
-              <th className="px-6 py-4 text-left text-[#FFFDF1]">Subtotal</th>
               <th className="px-6 py-4 text-left text-[#FFFDF1]">Total</th>
               <th className="px-6 py-4 text-left text-[#FFFDF1]">Date</th>
               <th className="px-6 py-4 text-left text-[#FFFDF1]">Type</th>
@@ -43,7 +48,7 @@ export function TransactionsTable({
             {loading ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={7}
                   className="px-6 py-6 text-center text-sm text-[#628141]"
                 >
                   Loading transactions...
@@ -52,14 +57,14 @@ export function TransactionsTable({
             ) : error ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={7}
                   className="px-6 py-6 text-center text-sm text-red-600"
                 >
                   {error}
                 </td>
               </tr>
             ) : (
-              transactions.map((txn, index) => (
+              visibleTransactions.map((txn, index) => (
                 <tr
                   key={txn.salesId}
                   className={`border-b border-[#8BAE66]/20 ${
@@ -79,9 +84,6 @@ export function TransactionsTable({
                     {txn.branchName}
                   </td>
                   <td className="px-6 py-4 text-[#1B211A]">
-                    {formatAmount(txn.subtotal)}
-                  </td>
-                  <td className="px-6 py-4 text-[#1B211A]">
                     {formatAmount(txn.total)}
                   </td>
                   <td className="px-6 py-4 text-[#628141] text-sm">
@@ -98,6 +100,7 @@ export function TransactionsTable({
           </tbody>
         </table>
       </div>
+      {!loading && !error && transactions.length > 0 && <div className="flex items-center justify-between border-t border-[#EBD5AB]/40 px-6 py-4"><span className="text-xs text-[#628141]">{page} / {totalPages}</span><div className="flex gap-2"><button onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={page === 1} className="rounded-lg border border-[#628141]/30 px-3 py-1.5 text-xs text-[#628141] disabled:opacity-40">Previous</button><button onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={page === totalPages} className="rounded-lg border border-[#628141]/30 px-3 py-1.5 text-xs text-[#628141] disabled:opacity-40">Next</button></div></div>}
     </div>
   );
 }

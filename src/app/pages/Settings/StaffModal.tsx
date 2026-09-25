@@ -116,7 +116,6 @@ export function StaffModal({
                 <option value="Manager">Manager</option>
                 <option value="Staff">Staff</option>
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#628141]" />
             </div>
           </div>
 
@@ -139,7 +138,6 @@ export function StaffModal({
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#628141]" />
             </div>
           </div>
 
