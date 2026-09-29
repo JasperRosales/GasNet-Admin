@@ -52,11 +52,7 @@ export function DeleteConfirmModal({
                 "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
             }}
           >
-            {isBusy
-              ? "Deleting..."
-              : target.type === "branch"
-                ? "Delete Branch"
-                : "Delete Staff"}
+            {isBusy ? "Deleting..." : target.type === "branch" ? "Delete Branch" : "Delete Staff"}
           </button>
         </div>
       </div>

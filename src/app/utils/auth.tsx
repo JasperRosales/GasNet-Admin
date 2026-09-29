@@ -26,7 +26,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const sync = async (next: Session | null) => {
       if (!mounted) return;
       setSession(next);
-      if (!next) { setUser(null); setLoading(false); return; }
+      if (!next) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
       if (loadingProfile) return;
       loadingProfile = true;
       setLoading(true);
@@ -35,7 +39,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (profile.role !== "Admin") {
           throw new Error("This account is not authorized for the Admin system.");
         }
-        if (mounted) { setUser(profile); setError(null); }
+        if (mounted) {
+          setUser(profile);
+          setError(null);
+        }
       } catch (cause) {
         if (mounted) {
           setUser(null);
@@ -48,11 +55,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (mounted) setLoading(false);
       }
     };
-    void supabase.auth.getSession().then(({ data }) => sync(data.session)).catch((cause) => {
-      if (mounted) { setError(cause instanceof Error ? cause.message : "Unable to restore session."); setLoading(false); }
+    void supabase.auth
+      .getSession()
+      .then(({ data }) => sync(data.session))
+      .catch((cause) => {
+        if (mounted) {
+          setError(cause instanceof Error ? cause.message : "Unable to restore session.");
+          setLoading(false);
+        }
+      });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
+      void sync(next);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => { void sync(next); });
-    return () => { mounted = false; listener.subscription.unsubscribe(); };
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -63,15 +81,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setError(message);
       throw new Error(message);
     }
-    const { data, error: authError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
-    if (authError) { setError(authError.message); throw new Error(authError.message); }
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
+    if (authError) {
+      setError(authError.message);
+      throw new Error(authError.message);
+    }
     if (!data.session) throw new Error("Supabase did not return a session.");
     // Profile loading happens after authentication so authenticated-only RLS
     // policies can safely resolve the staff role and branch.
   };
-  const signOut = async () => { const { error: signOutError } = await supabase.auth.signOut(); if (signOutError) setError(signOutError.message); setSession(null); setUser(null); };
-  const value = useMemo(() => ({ session, user, loading, error, signIn, signOut }), [session, user, loading, error]);
+  const signOut = async () => {
+    const { error: signOutError } = await supabase.auth.signOut();
+    if (signOutError) setError(signOutError.message);
+    setSession(null);
+    setUser(null);
+  };
+  const value = useMemo(
+    () => ({ session, user, loading, error, signIn, signOut }),
+    [session, user, loading, error]
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
-export function useAuth() { const context = useContext(AuthContext); if (!context) throw new Error("useAuth must be used within an AuthProvider"); return context; }
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
+  return context;
+}
 export type { AuthContextValue };

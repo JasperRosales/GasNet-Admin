@@ -19,7 +19,9 @@ export function TransactionsTable({
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(transactions.length / pageSize));
-  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
   const visibleTransactions = transactions.slice((page - 1) * pageSize, page * pageSize);
   return (
     <div
@@ -34,9 +36,7 @@ export function TransactionsTable({
           <thead className="bg-gradient-to-r from-[#628141] to-[#8BAE66]">
             <tr>
               <th className="px-6 py-4 text-left text-[#FFFDF1]">ID</th>
-              <th className="px-6 py-4 text-left text-[#FFFDF1]">
-                Tracking No
-              </th>
+              <th className="px-6 py-4 text-left text-[#FFFDF1]">Tracking No</th>
               <th className="px-6 py-4 text-left text-[#FFFDF1]">Customer</th>
               <th className="px-6 py-4 text-left text-[#FFFDF1]">Branch</th>
               <th className="px-6 py-4 text-left text-[#FFFDF1]">Total</th>
@@ -47,19 +47,13 @@ export function TransactionsTable({
           <tbody>
             {loading ? (
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-6 py-6 text-center text-sm text-[#628141]"
-                >
+                <td colSpan={7} className="px-6 py-6 text-center text-sm text-[#628141]">
                   Loading transactions...
                 </td>
               </tr>
             ) : error ? (
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-6 py-6 text-center text-sm text-red-600"
-                >
+                <td colSpan={7} className="px-6 py-6 text-center text-sm text-red-600">
                   {error}
                 </td>
               </tr>
@@ -71,21 +65,11 @@ export function TransactionsTable({
                     index % 2 === 0 ? "bg-[#FFFDF1]" : "bg-[#EBD5AB]/10"
                   }`}
                 >
-                  <td className="px-6 py-4 text-[#1B211A]">
-                    {txn.salesId}
-                  </td>
-                  <td className="px-6 py-4 text-[#628141]">
-                    {txn.trackingNo ?? "—"}
-                  </td>
-                  <td className="px-6 py-4 text-[#628141]">
-                    {txn.guestName}
-                  </td>
-                  <td className="px-6 py-4 text-[#628141]">
-                    {txn.branchName}
-                  </td>
-                  <td className="px-6 py-4 text-[#1B211A]">
-                    {formatAmount(txn.total)}
-                  </td>
+                  <td className="px-6 py-4 text-[#1B211A]">{txn.salesId}</td>
+                  <td className="px-6 py-4 text-[#628141]">{txn.trackingNo ?? "—"}</td>
+                  <td className="px-6 py-4 text-[#628141]">{txn.guestName}</td>
+                  <td className="px-6 py-4 text-[#628141]">{txn.branchName}</td>
+                  <td className="px-6 py-4 text-[#1B211A]">{formatAmount(txn.total)}</td>
                   <td className="px-6 py-4 text-[#628141] text-sm">
                     {formatDisplayDate(txn.transactionDate)}
                   </td>
@@ -100,7 +84,29 @@ export function TransactionsTable({
           </tbody>
         </table>
       </div>
-      {!loading && !error && transactions.length > 0 && <div className="flex items-center justify-between border-t border-[#EBD5AB]/40 px-6 py-4"><span className="text-xs text-[#628141]">{page} / {totalPages}</span><div className="flex gap-2"><button onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={page === 1} className="rounded-lg border border-[#628141]/30 px-3 py-1.5 text-xs text-[#628141] disabled:opacity-40">Previous</button><button onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={page === totalPages} className="rounded-lg border border-[#628141]/30 px-3 py-1.5 text-xs text-[#628141] disabled:opacity-40">Next</button></div></div>}
+      {!loading && !error && transactions.length > 0 && (
+        <div className="flex items-center justify-between border-t border-[#EBD5AB]/40 px-6 py-4">
+          <span className="text-xs text-[#628141]">
+            {page} / {totalPages}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              disabled={page === 1}
+              className="rounded-lg border border-[#628141]/30 px-3 py-1.5 text-xs text-[#628141] disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              disabled={page === totalPages}
+              className="rounded-lg border border-[#628141]/30 px-3 py-1.5 text-xs text-[#628141] disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

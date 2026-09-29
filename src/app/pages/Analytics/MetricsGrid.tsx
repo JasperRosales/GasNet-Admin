@@ -27,9 +27,7 @@ export function MetricsGrid({ metrics }: MetricsGridProps) {
           </div>
           <h3 className="text-[#1B211A] mb-1">{metric.value}</h3>
           <p className="text-[#628141] text-sm mb-2">{metric.label}</p>
-          <span className="text-[#8BAE66] text-sm">
-            {metric.change} from last month
-          </span>
+          <span className="text-[#8BAE66] text-sm">{metric.change} from last month</span>
         </div>
       ))}
     </div>

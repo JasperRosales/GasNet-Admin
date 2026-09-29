@@ -39,9 +39,7 @@ export function BranchManagement({
           </div>
           <div>
             <h3 className="text-[#1B211A]">Branch Management</h3>
-            <p className="text-[#628141] text-sm">
-              Overview and settings for all branches
-            </p>
+            <p className="text-[#628141] text-sm">Overview and settings for all branches</p>
           </div>
         </div>
         <button
@@ -58,9 +56,7 @@ export function BranchManagement({
       </div>
 
       {error && (
-        <div className="mb-4 rounded-2xl bg-red-100/70 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
+        <div className="mb-4 rounded-2xl bg-red-100/70 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
       {loading ? (
         <div className="rounded-2xl bg-[#EBD5AB]/15 px-4 py-6 text-center text-sm text-[#628141]">
@@ -97,8 +93,18 @@ export function BranchManagement({
                 Manage Branch
               </button>
               <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-xs text-[#628141]">Current month: {branch.targetRevenue > 0 ? `₱${branch.targetRevenue.toLocaleString("en-PH")}` : "Not set"}</p>
-                <button onClick={() => onTarget(branch)} className="rounded-lg border border-[#628141]/30 px-3 py-1 text-xs text-[#628141]">Set Target</button>
+                <p className="text-xs text-[#628141]">
+                  Current month:{" "}
+                  {branch.targetRevenue > 0
+                    ? `₱${branch.targetRevenue.toLocaleString("en-PH")}`
+                    : "Not set"}
+                </p>
+                <button
+                  onClick={() => onTarget(branch)}
+                  className="rounded-lg border border-[#628141]/30 px-3 py-1 text-xs text-[#628141]"
+                >
+                  Set Target
+                </button>
               </div>
             </div>
           ))}

@@ -7,10 +7,7 @@ interface BranchPerformanceCardProps {
   colors: string[];
 }
 
-export function BranchPerformanceCard({
-  data,
-  colors,
-}: BranchPerformanceCardProps) {
+export function BranchPerformanceCard({ data, colors }: BranchPerformanceCardProps) {
   return (
     <div
       className="p-6 rounded-3xl bg-[#FFFDF1]"
@@ -31,9 +28,7 @@ export function BranchPerformanceCard({
         </div>
         <div>
           <h3 className="text-[#1B211A]">Branch Performance</h3>
-          <p className="text-[#628141] text-sm">
-            Sales distribution across 6 branches
-          </p>
+          <p className="text-[#628141] text-sm">Sales distribution across 6 branches</p>
         </div>
       </div>
       <ResponsiveContainer width="100%" height={250}>

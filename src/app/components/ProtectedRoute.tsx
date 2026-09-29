@@ -14,9 +14,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (error) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center text-red-600">
-        {error}
-      </div>
+      <div className="flex min-h-[50vh] items-center justify-center text-red-600">{error}</div>
     );
   }
 

@@ -57,5 +57,4 @@ export interface SettingSection {
 }
 
 export type DeleteTarget =
-  | { type: "branch"; id: number; name: string }
-  | { type: "staff"; id: string; name: string };
+  { type: "branch"; id: number; name: string } | { type: "staff"; id: string; name: string };

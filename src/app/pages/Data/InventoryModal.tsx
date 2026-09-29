@@ -1,11 +1,6 @@
 import { ChevronDown, X } from "lucide-react";
 import type { FormEvent } from "react";
-import type {
-  BranchOption,
-  InventoryForm,
-  InventoryItem,
-  ProductOption,
-} from "./types";
+import type { BranchOption, InventoryForm, InventoryItem, ProductOption } from "./types";
 
 interface InventoryModalProps {
   open: boolean;
@@ -43,11 +38,8 @@ export function InventoryModal({
   if (!open) return null;
 
   const selectedBranchId = Number(form.branchId);
-  const selectedBranchItems = inventoryItems.filter(
-    (item) => item.branchId === selectedBranchId,
-  );
-  const reorderLevelValue =
-    editingStockId === null ? form.reorderLevel || "1" : form.reorderLevel;
+  const selectedBranchItems = inventoryItems.filter((item) => item.branchId === selectedBranchId);
+  const reorderLevelValue = editingStockId === null ? form.reorderLevel || "1" : form.reorderLevel;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1B211A]/40 p-4">
@@ -61,9 +53,7 @@ export function InventoryModal({
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h3 className="text-[#1B211A]">
-              {editingStockId !== null
-                ? "Edit Inventory Data"
-                : "Add Inventory Data"}
+              {editingStockId !== null ? "Edit Inventory Data" : "Add Inventory Data"}
             </h3>
             <p className="text-sm text-[#628141]">
               Update quantities and reorder levels for branch stock.
@@ -124,9 +114,7 @@ export function InventoryModal({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm text-[#628141]">
-                  Quantity
-                </label>
+                <label className="mb-2 block text-sm text-[#628141]">Quantity</label>
                 <input
                   type="number"
                   min={0}
@@ -138,16 +126,12 @@ export function InventoryModal({
               </div>
 
               <div>
-                <label className="mb-2 block text-sm text-[#628141]">
-                  Reorder Level
-                </label>
+                <label className="mb-2 block text-sm text-[#628141]">Reorder Level</label>
                 <input
                   type="number"
                   min={0}
                   value={reorderLevelValue}
-                  onChange={(event) =>
-                    onFieldChange("reorderLevel", event.target.value)
-                  }
+                  onChange={(event) => onFieldChange("reorderLevel", event.target.value)}
                   className="w-full rounded-2xl bg-[#EBD5AB]/20 px-4 py-3 text-[#1B211A] outline-none"
                   required
                 />
@@ -166,7 +150,7 @@ export function InventoryModal({
                   type="button"
                   onClick={() => {
                     const target = selectedBranchItems.find(
-                      (item) => item.stockId === editingStockId,
+                      (item) => item.stockId === editingStockId
                     );
                     if (target) onDeleteItem(target);
                   }}
@@ -199,11 +183,7 @@ export function InventoryModal({
                     "0 4px 12px rgba(98, 129, 65, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.2)",
                 }}
               >
-                {isSaving
-                  ? "Saving..."
-                  : editingStockId !== null
-                    ? "Save Changes"
-                    : "Add Data"}
+                {isSaving ? "Saving..." : editingStockId !== null ? "Save Changes" : "Add Data"}
               </button>
             </div>
           </form>

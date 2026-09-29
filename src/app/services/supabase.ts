@@ -34,14 +34,10 @@ function getSupabaseConfig(): SupabaseConfig {
 
 const config = getSupabaseConfig();
 
-export const supabase: SupabaseClient = createClient(
-  config.url,
-  config.publishableKey,
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
+export const supabase: SupabaseClient = createClient(config.url, config.publishableKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
   },
-);
+});

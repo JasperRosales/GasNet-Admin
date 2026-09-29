@@ -9,13 +9,7 @@ interface StaffManagementProps {
   onEdit?: (staff: StaffSetting) => void;
 }
 
-export function StaffManagement({
-  staff,
-  loading,
-  error,
-  onCreate,
-  onEdit,
-}: StaffManagementProps) {
+export function StaffManagement({ staff, loading, error, onCreate, onEdit }: StaffManagementProps) {
   return (
     <div
       className="p-6 rounded-3xl bg-[#FFFDF1]"
@@ -37,9 +31,7 @@ export function StaffManagement({
           </div>
           <div>
             <h3 className="text-[#1B211A]">Staff Management</h3>
-            <p className="text-[#628141] text-sm">
-              Manage staff access and assignments
-            </p>
+            <p className="text-[#628141] text-sm">Manage staff access and assignments</p>
           </div>
         </div>
         {onCreate && (
@@ -58,9 +50,7 @@ export function StaffManagement({
       </div>
 
       {error && (
-        <div className="mb-4 rounded-2xl bg-red-100/70 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
+        <div className="mb-4 rounded-2xl bg-red-100/70 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
       {loading ? (
         <div className="rounded-2xl bg-[#EBD5AB]/15 px-4 py-6 text-center text-sm text-[#628141]">
@@ -84,9 +74,7 @@ export function StaffManagement({
               </div>
               <div className="space-y-1">
                 <p className="text-[#628141] text-sm">{member.branchName}</p>
-                <p className="text-[#628141] text-xs">
-                  ID: {member.id.slice(0, 8)}...
-                </p>
+                <p className="text-[#628141] text-xs">ID: {member.id.slice(0, 8)}...</p>
               </div>
               {onEdit && (
                 <button

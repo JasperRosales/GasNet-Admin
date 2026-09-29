@@ -36,9 +36,7 @@ export function SettingsSectionList({ sections }: SettingsSectionListProps) {
             <div className="space-y-4">
               {section.fields.map((field, idx) => (
                 <div key={idx}>
-                  <label className="text-[#628141] text-sm mb-2 block">
-                    {field.label}
-                  </label>
+                  <label className="text-[#628141] text-sm mb-2 block">{field.label}</label>
                   <input
                     type={field.type}
                     defaultValue={field.value}
@@ -63,9 +61,7 @@ export function SettingsSectionList({ sections }: SettingsSectionListProps) {
                   <button
                     onClick={() => toggle.setter(!toggle.state)}
                     className={`relative w-14 h-7 rounded-full transition-colors ${
-                      toggle.state
-                        ? "bg-gradient-to-r from-[#628141] to-[#8BAE66]"
-                        : "bg-[#EBD5AB]"
+                      toggle.state ? "bg-gradient-to-r from-[#628141] to-[#8BAE66]" : "bg-[#EBD5AB]"
                     }`}
                     style={{
                       boxShadow: toggle.state

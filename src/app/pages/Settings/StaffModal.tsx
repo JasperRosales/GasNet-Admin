@@ -42,9 +42,7 @@ export function StaffModal({
       >
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h3 className="text-[#1B211A]">
-              {isEditing ? "Edit Staff" : "Create Staff"}
-            </h3>
+            <h3 className="text-[#1B211A]">{isEditing ? "Edit Staff" : "Create Staff"}</h3>
             <p className="text-sm text-[#628141]">
               {isEditing
                 ? "Update the account email, role, and branch assignment."

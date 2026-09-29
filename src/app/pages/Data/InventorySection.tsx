@@ -1,10 +1,5 @@
 import { Pencil } from "lucide-react";
-import type {
-  InventoryRow,
-  InventoryStatusTab,
-  ProductColumn,
-  StatusTone,
-} from "./types";
+import type { InventoryRow, InventoryStatusTab, ProductColumn, StatusTone } from "./types";
 
 interface InventorySectionProps {
   inventoryColumns: ProductColumn[];
@@ -20,7 +15,7 @@ interface InventorySectionProps {
     total: number,
     activeStatus: InventoryStatusTab,
     outgoingTotal: number,
-    returnedTotal: number,
+    returnedTotal: number
   ) => { label: string; tone: StatusTone };
   getStatusBadgeClass: (tone: StatusTone) => string;
 }
@@ -87,18 +82,13 @@ export function InventorySection({
                 <th className="px-6 py-4 text-left text-[#FFFDF1]">ID</th>
                 <th className="px-6 py-4 text-left text-[#FFFDF1]">Branch</th>
                 {inventoryColumns.map((column) => (
-                  <th
-                    key={column.id}
-                    className="px-6 py-4 text-left text-[#FFFDF1]"
-                  >
+                  <th key={column.id} className="px-6 py-4 text-left text-[#FFFDF1]">
                     {column.label}
                   </th>
                 ))}
                 <th className="px-6 py-4 text-left text-[#FFFDF1]">Total</th>
                 <th className="px-6 py-4 text-left text-[#FFFDF1]">Status</th>
-                <th className="px-6 py-4 text-left text-[#FFFDF1]">
-                  Last Update
-                </th>
+                <th className="px-6 py-4 text-left text-[#FFFDF1]">Last Update</th>
                 <th className="px-6 py-4 text-left text-[#FFFDF1]">Actions</th>
               </tr>
             </thead>
@@ -125,14 +115,14 @@ export function InventorySection({
                 inventoryRows.map((row, index) => {
                   const total = inventoryColumns.reduce(
                     (sum, column) => sum + (row.quantities[column.id] ?? 0),
-                    0,
+                    0
                   );
 
                   const statusMeta = getInventoryStatusMeta(
                     total,
                     activeStatus,
                     row.outgoingTotal,
-                    row.returnedTotal,
+                    row.returnedTotal
                   );
 
                   return (
@@ -142,12 +132,8 @@ export function InventorySection({
                         index % 2 === 0 ? "bg-[#FFFDF1]" : "bg-[#EBD5AB]/10"
                       }`}
                     >
-                      <td className="px-6 py-4 text-[#1B211A]">
-                        {row.branchId}
-                      </td>
-                      <td className="px-6 py-4 text-[#628141]">
-                        {row.branchName}
-                      </td>
+                      <td className="px-6 py-4 text-[#1B211A]">{row.branchId}</td>
+                      <td className="px-6 py-4 text-[#628141]">{row.branchName}</td>
                       {inventoryColumns.map((column) => (
                         <td key={column.id} className="px-6 py-4">
                           {row.quantities[column.id] ?? 0}
@@ -157,7 +143,7 @@ export function InventorySection({
                       <td className="px-6 py-4">
                         <span
                           className={`px-3 py-1 rounded-full text-sm ${getStatusBadgeClass(
-                            statusMeta.tone,
+                            statusMeta.tone
                           )}`}
                         >
                           {statusMeta.label}
@@ -168,7 +154,11 @@ export function InventorySection({
                         <button
                           type="button"
                           onClick={() => onEditInventoryRow(row.branchId)}
-                          className="inline-flex items-center gap-2 rounded-xl bg-[#EBD5AB]/35 px-4 py-2.5 text-sm font-semibold text-[#628141] transition hover:bg-[#EBD5AB]/55" style={{ boxShadow: "0 4px 12px rgba(98,129,65,.3), inset 0 2px 6px rgba(255,255,255,.2)" }}
+                          className="inline-flex items-center gap-2 rounded-xl bg-[#EBD5AB]/35 px-4 py-2.5 text-sm font-semibold text-[#628141] transition hover:bg-[#EBD5AB]/55"
+                          style={{
+                            boxShadow:
+                              "0 4px 12px rgba(98,129,65,.3), inset 0 2px 6px rgba(255,255,255,.2)",
+                          }}
                         >
                           <Pencil className="h-4 w-4" /> Edit
                         </button>

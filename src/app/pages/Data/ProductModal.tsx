@@ -35,9 +35,7 @@ export function ProductModal({
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h3 className="text-[#1B211A]">Create Product</h3>
-            <p className="text-sm text-[#628141]">
-              Add a new product for inventory and pricing.
-            </p>
+            <p className="text-sm text-[#628141]">Add a new product for inventory and pricing.</p>
           </div>
           <button
             onClick={onClose}
@@ -74,9 +72,7 @@ export function ProductModal({
           </div>
 
           {error && (
-            <div className="rounded-2xl bg-red-100/70 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
+            <div className="rounded-2xl bg-red-100/70 px-4 py-3 text-sm text-red-700">{error}</div>
           )}
 
           <div className="flex justify-end gap-3 pt-2">

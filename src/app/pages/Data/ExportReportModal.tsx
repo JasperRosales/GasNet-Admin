@@ -143,16 +143,11 @@ export function ExportReportModal({
           }}
         >
           <p className="mb-2 text-sm text-[#628141]">Report Preview</p>
-          <pre className="whitespace-pre-wrap text-sm text-[#1B211A]">
-            {reportPreview}
-          </pre>
+          <pre className="whitespace-pre-wrap text-sm text-[#1B211A]">{reportPreview}</pre>
         </div>
 
         <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="rounded-xl bg-[#8BAE66]/20 px-4 py-2 text-[#628141]"
-          >
+          <button onClick={onClose} className="rounded-xl bg-[#8BAE66]/20 px-4 py-2 text-[#628141]">
             Cancel
           </button>
           <button

@@ -1,6 +1,6 @@
 # GasNet Database Schema
 
-This document describes the authoritative root `schema.sql` exported from PostgreSQL. The dump contains the six unique public tables below; although the dump repeats `sales_transactions`, it defines one logical table, not two.
+This document describes the authoritative root `schema.sql` exported from PostgreSQL, along with migrations applied by the GasNet-Admin and GasNet-POS projects. The dump contains the public tables below; although the dump repeats `sales_transactions`, it defines one logical table, not two.
 
 Live row-level security policies may exist separately and are not part of the base schema.
 
@@ -68,11 +68,24 @@ There are no staff `email` or `active` columns. `staff_id` should correspond to 
 | `transaction_date` | `date` | Not null; defaults to `CURRENT_DATE` |
 | `branch_id` | `integer` | Not null; references `branches` on delete restrict |
 | `staff_id` | `uuid` | Not null (the base dump does not declare a foreign key) |
-| `transaction_type` | `varchar(20)` | Not null; `Instore` or `Commercial` |
+| `transaction_type` | `varchar(20)` | Not null; `Instore`, `Commercial`, or `Delivery` |
 | `subtotal` | `integer` | Not null; greater than or equal to zero |
 | `total` | `integer` | Not null; greater than or equal to zero |
 
 The base schema has no `transaction_items` table. The duplicate `sales_transactions` DDL and index statements in the root export represent the same single table.
+
+## `sales_transaction_items`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `line_id` | `bigint identity` | Primary key |
+| `sales_id` | `integer` | Not null; references `sales_transactions` |
+| `product_id` | `integer` | Not null; references `products` |
+| `quantity` | `integer` | Not null; greater than zero |
+| `unit_price_at_sale` | `integer` | Not null; greater than or equal to zero |
+| `created_at` | `timestamptz` | Not null; defaults to `now()` |
+
+RLS is enabled with permissive policies for `authenticated` role (`using (true) with check (true)`).
 
 ## `deliveries`
 
@@ -82,6 +95,20 @@ The base schema has no `transaction_items` table. The duplicate `sales_transacti
 | `sales_id` | `integer` | Not null; references `sales_transactions` on delete cascade |
 | `status` | `varchar(30)` | Not null; `Pending`, `Out for Delivery`, `Delivered`, or `Cancelled` |
 | `updated_at` | `timestamptz` | Not null; defaults to `now()` |
+
+## `notifications`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `notification_id` | `bigint identity` | Primary key |
+| `branch_id` | `integer` | Not null; references `branches` |
+| `title` | `text` | Not null |
+| `message` | `text` | Not null |
+| `notification_type` | `text` | Not null; defaults to `'general'` |
+| `created_at` | `timestamptz` | Not null; defaults to `now()` |
+| `is_read` | `boolean` | Not null; defaults to `false` |
+
+RLS is enabled with permissive policies for `authenticated` role.
 
 ## `revenue_targets`
 

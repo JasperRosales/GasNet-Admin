@@ -2,9 +2,7 @@ export function SettingsHeader() {
   return (
     <div className="border-b border-[#8BAE66]/30 pb-4">
       <h1 className="text-[#1B211A] mb-2">Settings</h1>
-      <p className="text-[#628141]">
-        Manage your LPG Trading dashboard preferences
-      </p>
+      <p className="text-[#628141]">Manage your LPG Trading dashboard preferences</p>
     </div>
   );
 }

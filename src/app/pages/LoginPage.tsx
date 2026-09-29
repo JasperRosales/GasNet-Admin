@@ -43,11 +43,12 @@ export function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-white p-4">
       <div className="w-full max-w-md">
-        <div 
+        <div
           className="p-8 rounded-3xl space-y-6"
           style={{
-            background: 'linear-gradient(135deg, #628141 0%, #8BAE66 100%)',
-            boxShadow: '20px 20px 60px rgba(0, 0, 0, 0.5), -20px -20px 60px rgba(139, 174, 102, 0.1), inset 0 2px 8px rgba(255, 255, 255, 0.2), inset 0 -2px 8px rgba(0, 0, 0, 0.1)',
+            background: "linear-gradient(135deg, #628141 0%, #8BAE66 100%)",
+            boxShadow:
+              "20px 20px 60px rgba(0, 0, 0, 0.5), -20px -20px 60px rgba(139, 174, 102, 0.1), inset 0 2px 8px rgba(255, 255, 255, 0.2), inset 0 -2px 8px rgba(0, 0, 0, 0.1)",
           }}
         >
           <div className="text-center mb-6">
@@ -67,7 +68,7 @@ export function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-[#1B211A]/30 border border-[#FFFDF1]/20 text-[#FFFDF1] placeholder-[#EBD5AB]/50 focus:outline-none focus:ring-2 focus:ring-[#FFFDF1]/50 focus:border-transparent transition"
                 style={{
-                  boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.3)',
+                  boxShadow: "inset 0 2px 8px rgba(0, 0, 0, 0.3)",
                 }}
                 placeholder="Enter your admin email"
                 required
@@ -86,7 +87,7 @@ export function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl bg-[#1B211A]/30 border border-[#FFFDF1]/20 text-[#FFFDF1] placeholder-[#EBD5AB]/50 focus:outline-none focus:ring-2 focus:ring-[#FFFDF1]/50 focus:border-transparent transition pr-12"
                   style={{
-                    boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.3)',
+                    boxShadow: "inset 0 2px 8px rgba(0, 0, 0, 0.3)",
                   }}
                   placeholder="Enter your password"
                   required
@@ -102,10 +103,10 @@ export function LoginPage() {
             </div>
 
             {error && (
-              <div 
+              <div
                 className="bg-[#1B211A]/40 border border-red-300/30 text-red-200 px-4 py-3 rounded-xl text-sm"
                 style={{
-                  boxShadow: 'inset 0 2px 6px rgba(0, 0, 0, 0.4)',
+                  boxShadow: "inset 0 2px 6px rgba(0, 0, 0, 0.4)",
                 }}
               >
                 {error}
@@ -117,13 +118,13 @@ export function LoginPage() {
               disabled={isSubmitting}
               className="w-full bg-[#1B211A] hover:bg-[#1B211A]/80 text-[#FFFDF1] font-semibold py-3 rounded-xl transition duration-200"
               style={{
-                boxShadow: '0 6px 20px rgba(0, 0, 0, 0.4), inset 0 2px 6px rgba(255, 255, 255, 0.1), inset 0 -2px 6px rgba(0, 0, 0, 0.2)',
+                boxShadow:
+                  "0 6px 20px rgba(0, 0, 0, 0.4), inset 0 2px 6px rgba(255, 255, 255, 0.1), inset 0 -2px 6px rgba(0, 0, 0, 0.2)",
               }}
             >
               {isSubmitting ? "Signing in..." : "Login"}
             </button>
           </form>
-
         </div>
       </div>
     </div>

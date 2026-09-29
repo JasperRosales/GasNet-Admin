@@ -40,9 +40,7 @@ export function BranchModal({
       >
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h3 className="text-[#1B211A]">
-              {isEditing ? "Edit Branch" : "Add Branch"}
-            </h3>
+            <h3 className="text-[#1B211A]">{isEditing ? "Edit Branch" : "Add Branch"}</h3>
             <p className="text-sm text-[#628141]">
               {isEditing
                 ? "Update branch details and contact info."
@@ -60,9 +58,7 @@ export function BranchModal({
 
         <form className="space-y-4" onSubmit={onSubmit}>
           <div>
-            <label className="mb-2 block text-sm text-[#628141]">
-              Branch Name
-            </label>
+            <label className="mb-2 block text-sm text-[#628141]">Branch Name</label>
             <input
               type="text"
               value={branchForm.name}
@@ -90,9 +86,7 @@ export function BranchModal({
           </div>
 
           <div>
-            <label className="mb-2 block text-sm text-[#628141]">
-              Contact Number
-            </label>
+            <label className="mb-2 block text-sm text-[#628141]">Contact Number</label>
             <input
               type="text"
               value={branchForm.contactNo}

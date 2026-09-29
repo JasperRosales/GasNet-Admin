@@ -10,7 +10,13 @@ export type MonthlyPerformancePoint = {
 };
 
 export type DailySalesPoint = { day: string; label: string; revenue: number; transactions: number };
-export type ProductRankingPoint = { productId: number; productName: string; name: string; totalKg: number; salesValue: number };
+export type ProductRankingPoint = {
+  productId: number;
+  productName: string;
+  name: string;
+  totalKg: number;
+  salesValue: number;
+};
 
 export type WeeklyDeliveryPoint = {
   day: string;

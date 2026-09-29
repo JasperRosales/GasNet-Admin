@@ -8,9 +8,7 @@ interface CreateStaffInput {
   branchId: number;
 }
 
-export async function registerStaff(
-  input: CreateStaffInput,
-): Promise<StaffSetting> {
+export async function registerStaff(input: CreateStaffInput): Promise<StaffSetting> {
   const created = await appService.staff.create({
     email: input.email,
     password: input.password,
