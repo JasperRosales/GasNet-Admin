@@ -19,11 +19,13 @@ export interface TransactionRecord {
   salesId: number;
   trackingNo: string | null;
   guestName: string;
+  branchId: number;
   branchName: string;
   subtotal: number;
   total: number;
   transactionDate: string;
   transactionType: string;
+  items: { productId: number; productName: string; weightKg: number | null; quantity: number; unitPrice: number; trackingNo?: string | null }[];
 }
 
 export interface InventoryRow {
@@ -63,6 +65,6 @@ export interface InventoryDeleteTarget {
   productName: string;
 }
 
-export type InventoryStatusTab = "Stock" | "Delivered" | "Returned";
-export type ReportType = "weekly" | "monthly" | "annual";
+export type InventoryStatusTab = "Stock" | "Delivered" | "Returned" | "Purchased";
+export type ReportType = "weekly" | "monthly";
 export type StatusTone = "low" | "moderate" | "high";

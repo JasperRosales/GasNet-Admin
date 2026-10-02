@@ -6,6 +6,9 @@ import { InventoryService } from "./inventoryService";
 import { TransactionService } from "./transactionService";
 import { NotificationService } from "./notificationService";
 import { StaffService } from "./staffService";
+import { PurchasedService } from "./purchasedService";
+import { DeliveryService } from "./deliveryService";
+import { ReturnedService } from "./returnedService";
 import { DashboardService } from "./dashboardService";
 import { AnalyticsService } from "./analyticsService";
 
@@ -17,6 +20,9 @@ const inventoryService = new InventoryService();
 const transactionService = new TransactionService();
 const notificationService = new NotificationService();
 const staffService = new StaffService();
+const purchasedService = new PurchasedService();
+const deliveryService = new DeliveryService();
+const returnedService = new ReturnedService();
 const dashboardService = new DashboardService(
   branchService,
   inventoryService,
@@ -58,6 +64,13 @@ export const appService = {
     delete: inventoryService.remove.bind(inventoryService),
   },
   transactions: { list: transactionService.list.bind(transactionService) },
+  purchased: { list: purchasedService.list.bind(purchasedService) },
+  delivery: { list: deliveryService.list.bind(deliveryService) },
+  returned: {
+    list: returnedService.list.bind(returnedService),
+    recordReturn: returnedService.recordReturn.bind(returnedService),
+    searchItems: returnedService.searchItems.bind(returnedService),
+  },
   dashboard: {
     get: dashboardService.get.bind(dashboardService),
     getHomeInsights: dashboardService.getHomeInsights.bind(dashboardService),

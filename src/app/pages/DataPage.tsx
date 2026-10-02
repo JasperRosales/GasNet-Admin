@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { appService, type ProductDTO } from "../services/appService";
 import { DataControls } from "./Data/DataControls";
 import { DataHeader } from "./Data/DataHeader";
@@ -7,6 +7,7 @@ import { ExportReportModal } from "./Data/ExportReportModal";
 import { InventoryDeleteModal } from "./Data/InventoryDeleteModal";
 import { InventoryModal } from "./Data/InventoryModal";
 import { InventorySection } from "./Data/InventorySection";
+import { AdminReturnPanel } from "./Data/AdminReturnPanel";
 import { ProductCatalog } from "./Data/ProductCatalog";
 import { ProductModal } from "./Data/ProductModal";
 import { TransactionsTable } from "./Data/TransactionsTable";
@@ -80,6 +81,47 @@ export function DataPage() {
     transactionSearch,
     transactionType
   );
+  const toRows = (records: Array<{ branchId: number; branchName: string; productId: number; quantity: number }>) => {
+    const rows = new Map<number, { branchId: number; branchName: string; quantities: Record<number, number> }>();
+    for (const record of records) {
+      const existing = rows.get(record.branchId) ?? {
+        branchId: record.branchId,
+        branchName: record.branchName,
+        quantities: {},
+      };
+      existing.quantities[record.productId] =
+        (existing.quantities[record.productId] ?? 0) + record.quantity;
+      rows.set(record.branchId, existing);
+    }
+    return Array.from(rows.values()).map((row) => ({ ...row, outgoingTotal: 0, returnedTotal: 0 }));
+  };
+  const purchasedRows = useMemo(() => toRows(data.purchasedRecords), [data.purchasedRecords]);
+  const deliveryRows = useMemo(() => toRows(data.deliveryRecords), [data.deliveryRecords]);
+  const returnedRows = useMemo(() => toRows(data.returnedRecords), [data.returnedRecords]);
+
+  const inventoryDisplayRows = useMemo(() => {
+    let rows = inventory.rows;
+    if (inventory.status === "Purchased") rows = purchasedRows;
+    else if (inventory.status === "Delivered") rows = deliveryRows;
+    else if (inventory.status === "Returned") rows = returnedRows;
+    if (!inventory.selectedBranchId) return rows;
+    return rows.filter((row) => row.branchId === Number(inventory.selectedBranchId));
+  }, [inventory.status, inventory.rows, inventory.selectedBranchId, purchasedRows, deliveryRows, returnedRows]);
+  const handleRecordReturn = async (input: {
+    trackingNo: string;
+    quantity: number;
+    reason?: string;
+  }) => {
+    try {
+      await appService.returned.recordReturn(input);
+      setRefreshTick((value) => value + 1);
+      return null;
+    } catch (error) {
+      console.error("Failed to record return.", error);
+      return error instanceof Error ? error.message : "Unable to record the return.";
+    }
+  };
+
   const editCatalogProduct = async (product: ProductDTO) => {
     const name = window.prompt("Product name", product.name);
     if (name === null) return;
@@ -136,7 +178,7 @@ export function DataPage() {
         onOpenExport={() => report.setOpen(true)}
         branchOptions={data.branchOptions}
         selectedBranchId={inventory.selectedBranchId}
-        showBranchFilter={activeTab === "catalog"}
+        showBranchFilter={activeTab === "catalog" || activeTab === "transactions"}
         onBranchChange={inventory.setSelectedBranchId}
         showTransactionSearch={activeTab === "transactions"}
         searchTerm={transactionSearch}
@@ -148,7 +190,7 @@ export function DataPage() {
       {activeTab === "inventory" ? (
         <InventorySection
           inventoryColumns={data.inventoryColumns}
-          inventoryRows={inventory.rows}
+          inventoryRows={inventoryDisplayRows}
           inventoryLoading={data.inventoryLoading}
           inventoryError={data.inventoryError}
           activeStatus={inventory.status}
@@ -159,7 +201,14 @@ export function DataPage() {
           getInventoryStatusMeta={getInventoryStatusMeta}
           getStatusBadgeClass={getStatusBadgeClass}
         />
-      ) : activeTab === "transactions" ? (
+      ) : null}
+      {activeTab === "inventory" && inventory.status === "Returned" && (
+        <AdminReturnPanel
+          searchItems={appService.returned.searchItems}
+          onRecordReturn={handleRecordReturn}
+        />
+      )}
+      {activeTab === "inventory" ? null : activeTab === "transactions" ? (
         <TransactionsTable
           transactions={visibleTransactions}
           loading={data.transactionsLoading}

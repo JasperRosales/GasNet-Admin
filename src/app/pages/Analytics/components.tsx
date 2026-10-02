@@ -121,9 +121,16 @@ export function RevenueChart({ data }: { data: MonthlyPerformancePoint[] }) {
         />
         <Bar
           yAxisId="average"
-          dataKey="averageOrderValue"
-          name="Average order value"
+          dataKey="instore"
+          name="Instore"
           fill="#8BAE66"
+          radius={[8, 8, 0, 0]}
+        />
+        <Bar
+          yAxisId="average"
+          dataKey="delivery"
+          name="Delivery"
+          fill="#EBD5AB"
           radius={[8, 8, 0, 0]}
         />
       </BarChart>
@@ -141,7 +148,7 @@ export function WeeklySalesChart({ data }: { data: WeeklyDeliveryPoint[] }) {
         <Tooltip contentStyle={tooltipStyle} />
         <Legend />
         <Bar dataKey="InStore" name="In-Store" fill="#628141" radius={[8, 8, 0, 0]} />
-        <Bar dataKey="Commercial" fill="#8BAE66" radius={[8, 8, 0, 0]} />
+        <Bar dataKey="Delivery" name="Delivery" fill="#8BAE66" radius={[8, 8, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

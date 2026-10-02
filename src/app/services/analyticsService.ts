@@ -38,11 +38,15 @@ export class AnalyticsService implements IAnalyticsService {
         profit: 0,
         transactionCount: 0,
         averageOrderValue: 0,
+        instore: 0,
+        delivery: 0,
       };
       m.revenue += t.total;
       m.profit = m.revenue;
       m.transactionCount++;
       m.averageOrderValue = m.revenue / m.transactionCount;
+      if (t.transactionType === "Delivery") m.delivery++;
+      else m.instore++;
       months.set(month, m);
       const d = daily.get(t.transactionDate) ?? {
         day: t.transactionDate,
@@ -59,16 +63,11 @@ export class AnalyticsService implements IAnalyticsService {
         day: `Week ${wk}`,
         label: `Week ${wk}`,
         InStore: 0,
-        Commercial: 0,
         Delivery: 0,
         inStore: 0,
-        commercial: 0,
         delivery: 0,
       };
-      if (t.transactionType === "Commercial") {
-        w.Commercial++;
-        w.commercial++;
-      } else if (t.transactionType === "Delivery") {
+      if (t.transactionType === "Delivery") {
         w.Delivery++;
         w.delivery++;
       } else {

@@ -85,7 +85,6 @@ export function DataControls({
             >
               <option value="">All sales</option>
               <option value="Instore">In-store sales</option>
-              <option value="Commercial">Commercial sales</option>
               <option value="Delivery">Delivery sales</option>
             </select>
           </label>

@@ -91,14 +91,13 @@ Paginated table showing:
 Modal for configuring and previewing report exports.
 
 **Report Types:**
-- Weekly
+- Weekly (week 1–5 of the selected month)
 - Monthly
-- Annual
 
 **Features:**
-- Year/month/week selectors
+- Year/month/week selectors — the year list is derived from the transaction dates present in the data
 - Text preview of report content
-- Download as `.txt` file
+- Exports a print-ready HTML report in a popup window (falls back to downloading the `.html` file when popups are blocked)
 
 ---
 
@@ -127,7 +126,7 @@ Manages all inventory-related UI state and operations:
 
 ### `useReportExport(transactions)`
 
-Computes report preview text and provides a download function.
+Computes the year list from transaction dates, the report preview text, and the export function that opens a print-ready HTML report (download fallback).
 
 ---
 

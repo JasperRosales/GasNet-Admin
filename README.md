@@ -2,6 +2,14 @@
 
 Admin dashboard for CJG TRADING LPG cylinder distribution. React + TypeScript + Vite + Supabase.
 
+> **Note:** The app will not work unless the environment API keys are set. Create a local env file with:
+>
+> ```env
+> VITE_SUPABASE_URL=https://<project>.supabase.co
+> VITE_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
+> VITE_GEMINI_API_KEY=<gemini-api-key>
+> ```
+
 ## Table of Contents
 
 | Document | Description |

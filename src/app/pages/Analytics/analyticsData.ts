@@ -49,6 +49,8 @@ export function mapAnalyticsData(analytics: any, now: Date) {
           point.averageOrderValue ??
             (Number(point.transactionCount ?? 0) ? revenue / Number(point.transactionCount) : 0)
         ),
+        instore: Number(point.instore ?? point.InStore ?? 0),
+        delivery: Number(point.delivery ?? point.Delivery ?? 0),
       };
     }
   );
@@ -83,7 +85,6 @@ export function mapAnalyticsData(analytics: any, now: Date) {
   const weeklyDeliveries: WeeklyDeliveryPoint[] = weeklySource.map((point: any) => ({
     day: String(point.day ?? point.label ?? "â€”"),
     InStore: Number(point.InStore ?? point.inStore ?? 0),
-    Commercial: Number(point.Commercial ?? point.commercial ?? 0),
     Delivery: Number(point.Delivery ?? point.delivery ?? 0),
   }));
 

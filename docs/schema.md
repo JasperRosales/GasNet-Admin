@@ -1,130 +1,63 @@
-# GasNet Database Schema
+# GasNet Admin Database Schema
 
-This document describes the authoritative root `schema.sql` exported from PostgreSQL, along with migrations applied by the GasNet-Admin and GasNet-POS projects. The dump contains the public tables below; although the dump repeats `sales_transactions`, it defines one logical table, not two.
+This document describes the authoritative root [`schema.sql`](../../schema.sql)
+exported from PostgreSQL. The GasNet-Admin dashboard reads most of these tables
+and manages inventory, catalog prices, targets, and settings through the service
+layer in `src/app/services/`. Live RLS policies may exist separately and are not
+part of the base schema dump.
 
-Live row-level security policies may exist separately and are not part of the base schema.
+## Configuration
 
-## `branches`
+Provide only the project's public Supabase client configuration through local
+environment variables or the deployment's environment settings:
 
-| Column | Type | Constraints |
+```env
+VITE_SUPABASE_URL=https://<project>.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
+```
+
+Never commit service-role keys, database passwords, Auth credentials, or other
+secrets. `password` on `staff` is nullable legacy data; the client authenticates
+with Supabase Auth and does not read it.
+
+## Tables
+
+All tables are in `public`.
+
+| Table | Columns | Keys and constraints |
 | --- | --- | --- |
-| `branch_id` | `serial` | Primary key |
-| `branch_name` | `varchar(120)` | Not null, unique |
-| `location` | `varchar(255)` | Not null |
-| `contact_no` | `varchar(40)` | Not null |
+| `branches` | `branch_id`, `branch_name`, `location`, `contact_no` | PK `branch_id`; unique `branch_name` |
+| `staff` | `staff_id`, `branch_id`, `username`, nullable `password`, `role` | PK `staff_id`; unique `username`; FK `branch_id -> branches`; role is `Admin`, `Staff`, or `Manager` |
+| `products` | `product_id`, `product_name`, `weight_kg`, `active` | PK `product_id`; `weight_kg > 0` |
+| `branch_stock` | `stock_id`, `branch_id`, `product_id`, `quantity`, `reorder_level` | PK `stock_id`; unique `(branch_id, product_id)`; branch/product FKs; nonnegative quantities and reorder levels |
+| `branch_product_prices` | `branch_id`, `product_id`, `price`, `updated_at` | PK `(branch_id, product_id)`; branch/product FKs; `price >= 0` |
+| `sales_transactions` | `sales_id`, `idempotency_key`, nullable `tracking_no`, `guest_name`, nullable `guest_phone`, nullable `delivery_address`, `transaction_date`, `branch_id`, `staff_id`, `transaction_type`, `subtotal`, `total` | PK `sales_id`; unique `(branch_id, idempotency_key)`; unique `tracking_no`; FK `branch_id -> branches`; type is `Instore`, `Commercial`, or `Delivery`; totals are nonnegative. The DDL appears twice in the export but defines one logical table |
+| `sales_transaction_items` | `line_id`, `sales_id`, `product_id`, `quantity`, `unit_price_at_sale`, `tracking_no`, `created_at` | PK `line_id`; FK `sales_id -> sales_transactions`; FK `product_id -> products`; `quantity > 0`; `unit_price_at_sale >= 0`; per-item tracking number |
+| `delivery` | `delivery_id`, `sales_id`, `branch_id`, `product_id`, `quantity`, `unit_price_at_sale`, `created_at` | PK `delivery_id`; FK `sales_id`, `branch_id`, `product_id`; per-item delivery record for `Delivery` sales |
+| `deliveries` | `delivery_id`, `sales_id`, `status`, `updated_at` | PK `delivery_id`; FK `sales_id -> sales_transactions` with cascade delete; status is `Pending`, `Out for Delivery`, `Delivered`, or `Cancelled` |
+| `purchased` | `purchased_id`, `sales_id`, `branch_id`, `product_id`, `quantity`, `unit_price_at_sale`, `purchased_at` | PK `purchased_id`; FK `sales_id`, `branch_id`, `product_id`; record of in-store purchases |
+| `returned` | `returned_id`, `sales_id`, `branch_id`, `product_id`, `quantity`, `tracking_no`, `reason`, `created_at` | PK `returned_id`; FK `sales_id`, `branch_id`, `product_id`; returned items keyed by the product's tracking number |
+| `notifications` | `notification_id`, `branch_id`, `title`, `message`, `notification_type`, `created_at`, `is_read` | PK `notification_id`; FK `branch_id -> branches`; defaults `notification_type 'general'`, `is_read false` |
+| `revenue_targets` | `target_id`, `branch_id`, `period_start`, `period_end`, `target_revenue`, `created_at` | PK `target_id`; FK `branch_id -> branches`; unique `(branch_id, period_start, period_end)`; `target_revenue > 0`; `period_end >= period_start` |
+| `v_purchased_by_branch_product` | view | Aggregates in-store purchases per branch/product: `purchased_quantity`, `purchased_value` |
 
-There is no branch `active`, creation, or update column.
+## Row-Level Security
 
-## `staff`
-
-| Column | Type | Constraints |
-| --- | --- | --- |
-| `staff_id` | `uuid` | Primary key |
-| `branch_id` | `integer` | Not null; references `branches` on delete restrict |
-| `username` | `varchar(80)` | Not null, unique |
-| `password` | `varchar(255)` | Nullable |
-| `role` | `varchar(20)` | Not null; `Admin`, `Staff`, or `Manager` |
-
-There are no staff `email` or `active` columns. `staff_id` should correspond to a Supabase Auth user UUID. Auth users must be created through a trusted Supabase Admin API integration; PostgreSQL SQL cannot call `auth.admin` to create them.
-
-## `products`
-
-| Column | Type | Constraints |
-| --- | --- | --- |
-| `product_id` | `serial` | Primary key |
-| `product_name` | `varchar(120)` | Not null; not unique in the base schema |
-| `weight_kg` | `real` | Not null; greater than zero |
-| `active` | `boolean` | Not null; defaults to `true` |
-
-## `branch_product_prices`
-
-| Column | Type | Constraints |
-| --- | --- | --- |
-| `branch_id` | `integer` | Composite primary key; references `branches` on delete restrict |
-| `product_id` | `integer` | Composite primary key; references `products` on delete restrict |
-| `price` | `integer` | Not null; greater than or equal to zero |
-| `updated_at` | `timestamptz` | Not null; defaults to `now()` |
-
-## `branch_stock`
-
-| Column | Type | Constraints |
-| --- | --- | --- |
-| `stock_id` | `serial` | Primary key |
-| `branch_id` | `integer` | Not null; references `branches` on delete restrict; unique with `product_id` |
-| `product_id` | `integer` | Not null; references `products` on delete restrict |
-| `quantity` | `integer` | Not null; greater than or equal to zero |
-| `reorder_level` | `integer` | Not null; greater than or equal to zero |
-
-## `sales_transactions`
-
-| Column | Type | Constraints |
-| --- | --- | --- |
-| `sales_id` | `serial` | Primary key |
-| `idempotency_key` | `varchar(80)` | Not null; unique with `branch_id` |
-| `tracking_no` | `varchar(80)` | Nullable, unique |
-| `guest_name` | `varchar(120)` | Not null |
-| `guest_phone` | `varchar(40)` | Nullable |
-| `delivery_address` | `varchar(255)` | Nullable |
-| `transaction_date` | `date` | Not null; defaults to `CURRENT_DATE` |
-| `branch_id` | `integer` | Not null; references `branches` on delete restrict |
-| `staff_id` | `uuid` | Not null (the base dump does not declare a foreign key) |
-| `transaction_type` | `varchar(20)` | Not null; `Instore`, `Commercial`, or `Delivery` |
-| `subtotal` | `integer` | Not null; greater than or equal to zero |
-| `total` | `integer` | Not null; greater than or equal to zero |
-
-The base schema has no `transaction_items` table. The duplicate `sales_transactions` DDL and index statements in the root export represent the same single table.
-
-## `sales_transaction_items`
-
-| Column | Type | Constraints |
-| --- | --- | --- |
-| `line_id` | `bigint identity` | Primary key |
-| `sales_id` | `integer` | Not null; references `sales_transactions` |
-| `product_id` | `integer` | Not null; references `products` |
-| `quantity` | `integer` | Not null; greater than zero |
-| `unit_price_at_sale` | `integer` | Not null; greater than or equal to zero |
-| `created_at` | `timestamptz` | Not null; defaults to `now()` |
-
-RLS is enabled with permissive policies for `authenticated` role (`using (true) with check (true)`).
-
-## `deliveries`
-
-| Column | Type | Constraints |
-| --- | --- | --- |
-| `delivery_id` | `serial` | Primary key |
-| `sales_id` | `integer` | Not null; references `sales_transactions` on delete cascade |
-| `status` | `varchar(30)` | Not null; `Pending`, `Out for Delivery`, `Delivered`, or `Cancelled` |
-| `updated_at` | `timestamptz` | Not null; defaults to `now()` |
-
-## `notifications`
-
-| Column | Type | Constraints |
-| --- | --- | --- |
-| `notification_id` | `bigint identity` | Primary key |
-| `branch_id` | `integer` | Not null; references `branches` |
-| `title` | `text` | Not null |
-| `message` | `text` | Not null |
-| `notification_type` | `text` | Not null; defaults to `'general'` |
-| `created_at` | `timestamptz` | Not null; defaults to `now()` |
-| `is_read` | `boolean` | Not null; defaults to `false` |
-
-RLS is enabled with permissive policies for `authenticated` role.
-
-## `revenue_targets`
-
-Monthly branch sales targets use a date range so the stored period remains explicit.
-
-| Column | Type | Constraints |
-| --- | --- | --- |
-| `target_id` | `bigint identity` | Primary key |
-| `branch_id` | `integer` | Not null; references `branches` on delete cascade; unique with the period columns |
-| `period_start` | `date` | Not null; first day of a calendar month |
-| `period_end` | `date` | Not null; last day of the same calendar month and not before `period_start` |
-| `target_revenue` | `integer` | Not null; greater than zero |
-| `created_at` | `timestamptz` | Not null; defaults to `now()` |
-
-The table has a unique constraint on `(branch_id, period_start, period_end)`, RLS is enabled, and authenticated users may select, insert, update, and delete targets. Dashboard target percentages compare current-month `sales_transactions.total` with the branch target for that month.
+RLS is enabled on `purchased`, `delivery`, `returned`, and
+`sales_transaction_items` with permissive policies for the `authenticated`
+role (`using (true) with check (true)`). Any additional live policies on the
+other tables are deployment configuration and are not part of the base dump.
 
 ## Functions and RPCs
 
-The authoritative base schema defines no stored functions or RPCs. Any live RLS policies or separately deployed integrations are outside this base-schema dump.
+The authoritative base schema defines no stored functions or RPCs. Dashboard
+KPIs, analytics aggregations, and target-percentage calculations are computed
+client-side by the service layer.
+
+## Notes
+
+- The root export repeats the `sales_transactions` DDL and its index
+  statements; they describe one logical table, not two.
+- `staff.staff_id` should correspond to a Supabase Auth user UUID. PostgreSQL
+  SQL cannot call `auth.admin`, so auth users must be created through a trusted
+  Supabase Admin API integration.

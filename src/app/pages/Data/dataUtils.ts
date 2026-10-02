@@ -56,7 +56,9 @@ export const getInventoryStatusMeta = (
   total: number,
   activeStatus: InventoryStatusTab
 ): { label: string; tone: StatusTone } => {
-  if (activeStatus !== "Stock") return { label: "None", tone: "low" };
+  if (activeStatus !== "Stock") {
+    return { label: activeStatus === "Purchased" ? "Purchased" : "None", tone: total > 0 ? "moderate" : "low" };
+  }
   if (total < 120) return { label: "Low", tone: "low" };
   if (total < 160) return { label: "Moderate", tone: "moderate" };
   return { label: "Plenty", tone: "high" };

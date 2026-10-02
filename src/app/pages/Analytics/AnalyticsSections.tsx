@@ -86,7 +86,7 @@ export function PerformanceSection({
       <ChartCard
         icon={<BookAIcon className="w-5 h-5 text-[#FFFDF1]" />}
         title="Weekly Sales Performance"
-        description="In-Store, Commercial, and Delivery transactions"
+        description="In-Store and Delivery transactions"
       >
         <WeeklySalesChart data={weekly} />
       </ChartCard>

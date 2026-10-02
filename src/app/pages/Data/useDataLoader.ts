@@ -26,6 +26,36 @@ export function useDataLoader(refreshTick: number) {
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [transactionsError, setTransactionsError] = useState("");
+  const [purchasedRecords, setPurchasedRecords] = useState<
+    Array<{
+      branchId: number;
+      branchName: string;
+      productId: number;
+      productName: string;
+      quantity: number;
+      unitPriceAtSale: number;
+    }>
+  >([]);
+  const [deliveryRecords, setDeliveryRecords] = useState<
+    Array<{
+      branchId: number;
+      branchName: string;
+      productId: number;
+      productName: string;
+      quantity: number;
+      unitPriceAtSale: number;
+    }>
+  >([]);
+  const [returnedRecords, setReturnedRecords] = useState<
+    Array<{
+      branchId: number;
+      branchName: string;
+      productId: number;
+      productName: string;
+      quantity: number;
+      trackingNo: string | null;
+    }>
+  >([]);
 
   const loadInventory = useCallback(async () => {
     setInventoryLoading(true);
@@ -103,27 +133,39 @@ export function useDataLoader(refreshTick: number) {
   useEffect(() => {
     setTransactionsLoading(true);
     setTransactionsError("");
-    void appService.transactions
-      .list()
-      .then((rows) =>
+    void Promise.all([
+      appService.transactions.list(),
+      appService.purchased.list(),
+      appService.delivery.list(),
+      appService.returned.list(),
+    ])
+      .then(([rows, purchased, delivery, returned]) => {
         setTransactions(
           rows.map((row: TransactionDTO) => ({
             salesId: row.salesId,
             trackingNo: row.trackingNo,
             guestName: row.guestName,
+            branchId: row.branchId ?? 0,
             branchName: row.branchName || "Unknown",
             subtotal: row.subtotal,
             total: row.total,
             transactionDate: row.transactionDate,
             transactionType: row.transactionType,
+            items: row.items ?? [],
           }))
-        )
-      )
+        );
+        setPurchasedRecords(purchased);
+        setDeliveryRecords(delivery);
+        setReturnedRecords(returned);
+      })
       .catch((error) => {
         setTransactionsError(
           error instanceof Error ? error.message : "Unable to load transactions."
         );
         setTransactions([]);
+        setPurchasedRecords([]);
+        setDeliveryRecords([]);
+        setReturnedRecords([]);
       })
       .finally(() => setTransactionsLoading(false));
   }, [refreshTick]);
@@ -144,6 +186,9 @@ export function useDataLoader(refreshTick: number) {
     transactions,
     transactionsLoading,
     transactionsError,
+    purchasedRecords,
+    deliveryRecords,
+    returnedRecords,
     loadInventory,
     loadInventoryMetadata,
   };

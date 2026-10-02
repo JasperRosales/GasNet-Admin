@@ -7,6 +7,8 @@ export type MonthlyPerformancePoint = {
   profit: number;
   transactionCount: number;
   averageOrderValue: number;
+  instore: number;
+  delivery: number;
 };
 
 export type DailySalesPoint = { day: string; label: string; revenue: number; transactions: number };
@@ -21,7 +23,6 @@ export type ProductRankingPoint = {
 export type WeeklyDeliveryPoint = {
   day: string;
   InStore: number;
-  Commercial: number;
   Delivery: number;
 };
 

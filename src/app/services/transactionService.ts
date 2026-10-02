@@ -10,7 +10,7 @@ export class TransactionService implements ITransactionService {
     let q = supabase
       .from("sales_transactions")
       .select(
-        "sales_id, tracking_no, guest_name, guest_phone, delivery_address, transaction_date, branch_id, staff_id, transaction_type, subtotal, total, branches(branch_name), sales_transaction_items(line_id, product_id, quantity, unit_price_at_sale, products(product_name, weight_kg))"
+        "sales_id, tracking_no, guest_name, guest_phone, delivery_address, transaction_date, branch_id, staff_id, transaction_type, subtotal, total, branches(branch_name), sales_transaction_items(line_id, product_id, quantity, unit_price_at_sale, tracking_no, products(product_name, weight_kg))"
       )
       .order("transaction_date", { ascending: false });
     if (params.branchId) q = q.eq("branch_id", params.branchId);
@@ -40,6 +40,7 @@ export class TransactionService implements ITransactionService {
           weightKg: num((item.products as Row | null)?.weight_kg),
           quantity: num(item.quantity),
           unitPrice: num(item.unit_price_at_sale),
+          trackingNo: item.tracking_no ? String(item.tracking_no) : null,
         })),
       };
     });

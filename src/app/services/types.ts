@@ -62,6 +62,7 @@ export interface TransactionDTO {
     weightKg: number;
     quantity: number;
     unitPrice: number;
+    trackingNo?: string | null;
   }>;
 }
 export interface StaffDTO extends GasUser {}
@@ -141,15 +142,15 @@ export interface AnalyticsMonthPoint {
   profit: number;
   transactionCount: number;
   averageOrderValue: number;
+  instore: number;
+  delivery: number;
 }
 export interface AnalyticsWeeklyPoint {
   day: string;
   label: string;
   InStore: number;
-  Commercial: number;
   Delivery: number;
   inStore: number;
-  commercial: number;
   delivery: number;
 }
 export interface AnalyticsBranchPerformance {

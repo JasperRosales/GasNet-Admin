@@ -1,4 +1,5 @@
 import { Pencil } from "lucide-react";
+import type { ReactNode } from "react";
 import type { InventoryRow, InventoryStatusTab, ProductColumn, StatusTone } from "./types";
 
 interface InventorySectionProps {
@@ -18,6 +19,7 @@ interface InventorySectionProps {
     returnedTotal: number
   ) => { label: string; tone: StatusTone };
   getStatusBadgeClass: (tone: StatusTone) => string;
+  returnButton?: ReactNode;
 }
 
 export function InventorySection({
@@ -32,6 +34,7 @@ export function InventorySection({
   onEditInventoryRow,
   getInventoryStatusMeta,
   getStatusBadgeClass,
+  returnButton,
 }: InventorySectionProps) {
   return (
     <div className="space-y-4">
@@ -43,7 +46,7 @@ export function InventorySection({
               "0 8px 32px rgba(98, 129, 65, 0.15), inset 0 2px 8px rgba(255, 255, 255, 0.6), inset 0 -2px 8px rgba(98, 129, 65, 0.05)",
           }}
         >
-          {(["Stock", "Delivered", "Returned"] as const).map((statusTab) => (
+          {(["Stock", "Purchased", "Delivered", "Returned"] as const).map((statusTab) => (
             <button
               key={statusTab}
               onClick={() => onStatusChange(statusTab)}
@@ -66,7 +69,7 @@ export function InventorySection({
           ))}
         </div>
 
-        <div />
+        <div>{returnButton ?? null}</div>
       </div>
       <div
         className="rounded-3xl bg-[#FFFDF1] overflow-hidden"
@@ -87,7 +90,9 @@ export function InventorySection({
                   </th>
                 ))}
                 <th className="px-6 py-4 text-left text-[#FFFDF1]">Total</th>
-                <th className="px-6 py-4 text-left text-[#FFFDF1]">Status</th>
+                {activeStatus === "Stock" && (
+                  <th className="px-6 py-4 text-left text-[#FFFDF1]">Status</th>
+                )}
                 <th className="px-6 py-4 text-left text-[#FFFDF1]">Last Update</th>
                 <th className="px-6 py-4 text-left text-[#FFFDF1]">Actions</th>
               </tr>
@@ -96,7 +101,7 @@ export function InventorySection({
               {inventoryLoading ? (
                 <tr>
                   <td
-                    colSpan={inventoryColumns.length + 6}
+                    colSpan={inventoryColumns.length + (activeStatus === "Stock" ? 6 : 5)}
                     className="px-6 py-6 text-center text-sm text-[#628141]"
                   >
                     Loading inventory...
@@ -105,7 +110,7 @@ export function InventorySection({
               ) : inventoryError ? (
                 <tr>
                   <td
-                    colSpan={inventoryColumns.length + 6}
+                    colSpan={inventoryColumns.length + (activeStatus === "Stock" ? 6 : 5)}
                     className="px-6 py-6 text-center text-sm text-red-600"
                   >
                     {inventoryError}
@@ -140,15 +145,17 @@ export function InventorySection({
                         </td>
                       ))}
                       <td className="px-6 py-4">{total}</td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`px-3 py-1 rounded-full text-sm ${getStatusBadgeClass(
-                            statusMeta.tone
-                          )}`}
-                        >
-                          {statusMeta.label}
-                        </span>
-                      </td>
+                      {activeStatus === "Stock" && (
+                        <td className="px-6 py-4">
+                          <span
+                            className={`px-3 py-1 rounded-full text-sm ${getStatusBadgeClass(
+                              statusMeta.tone
+                            )}`}
+                          >
+                            {statusMeta.label}
+                          </span>
+                        </td>
+                      )}
                       <td className="px-6 py-4 text-[#628141] text-sm">—</td>
                       <td className="px-6 py-4">
                         <button
@@ -169,7 +176,7 @@ export function InventorySection({
               ) : (
                 <tr>
                   <td
-                    colSpan={inventoryColumns.length + 6}
+                    colSpan={inventoryColumns.length + (activeStatus === "Stock" ? 6 : 5)}
                     className="px-6 py-6 text-center text-sm text-[#628141]"
                   >
                     No inventory data available.
